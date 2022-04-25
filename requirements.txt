@@ -3,8 +3,9 @@ cffi<=1.12.3
 pycparser==2.19
 pymunk==5.5.0
 numpy>=1.16.0
-torch>=1.7 # check if you're on 3090 machine, may need different torch install
-torchvision
+# torch>=1.7 # check if you're on 3090 machine, may need different torch install
+# torchvision
+# use 'conda install pytorch==1.8.0 torchvision==0.9.0 torchaudio==0.8.0 cudatoolkit=11.1 -c pytorch -c conda-forge' instead 
 tensorboard>=2.0
 matplotlib
 pillow

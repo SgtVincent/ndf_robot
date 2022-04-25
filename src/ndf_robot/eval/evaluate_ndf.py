@@ -15,6 +15,7 @@ from airobot.utils import common
 from airobot import log_info
 from airobot.utils.common import euler2quat
 
+
 import ndf_robot.model.vnn_occupancy_net_pointnet_dgcnn as vnn_occupancy_network
 from ndf_robot.utils import util, trimesh_util
 from ndf_robot.utils.util import np2img
@@ -346,6 +347,9 @@ def main(args, global_dict):
 
         # convert mesh with vhacd
         if not osp.exists(obj_obj_file_dec):
+            # Volumetric Hierarchical Approximate Decomposition algorithm:
+            # This can import a concave Wavefront .obj file and export a new Wavefront obj file 
+            # that contains the convex decomposed parts
             p.vhacd(
                 obj_obj_file,
                 obj_obj_file_dec,
@@ -410,6 +414,14 @@ def main(args, global_dict):
         for i, cam in enumerate(cams.cams): 
             # get image and raw point cloud
             rgb, depth, seg = cam.get_images(get_rgb=True, get_depth=True, get_seg=True)
+            # # Add noise
+            if args.depth_noise == "gaussian":
+                min_depth = depth.min()
+                # noise type: random noise of pixel-wise < 2% noise
+                # given Intel Realsense noise is < 2%
+                depth_noise = np.multiply( (np.random.rand(depth.shape[0], depth.shape[1]) - 0.5), depth) * 2 * args.gaussian_std
+                depth += depth_noise
+                depth[depth <= 0.0] = min_depth / 2.0 # min depth clip
             pts_raw, _ = cam.get_pcd(in_world=True, rgb_image=rgb, depth_image=depth, depth_min=0.0, depth_max=np.inf)
 
             # flatten and find corresponding pixels in segmentation mask
@@ -778,6 +790,9 @@ if __name__ == "__main__":
     parser.add_argument('--grasp_dist_thresh', type=float, default=0.0025)
     parser.add_argument('--start_iteration', type=int, default=0)
 
+    # custom arguments
+    parser.add_argument('--depth_noise', type=str, default="none", choices=["none", "gaussian"])
+    parser.add_argument('--gaussian_std', type=float, default=0.02, help="ratio of std dev of gaussian noise to mean on depth map)")
 
     args = parser.parse_args()
 
@@ -789,6 +804,9 @@ if __name__ == "__main__":
     demo_load_dir = osp.join(path_util.get_ndf_data(), 'demos', obj_class, args.demo_exp)
 
     expstr = 'exp--' + str(args.exp)
+    if args.depth_noise == "gaussian":
+        expstr = expstr + f"_gaussian_noise_{args.gaussian_std}"
+
     modelstr = 'model--' + str(args.model_path)
     seedstr = 'seed--' + str(args.seed)
     full_experiment_name = '_'.join([expstr, modelstr, seedstr])
