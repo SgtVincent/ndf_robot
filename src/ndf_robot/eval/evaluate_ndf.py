@@ -288,6 +288,9 @@ def main(args, global_dict):
 
     viz_data_list = []
     for iteration in range(args.start_iteration, args.num_iterations):
+        # NOTE: running on laptop gpu, CUDA out of memory error 
+        # torch.cuda.empty_cache()
+
         # load a test object
         obj_shapenet_id = random.sample(test_object_ids, 1)[0]
         id_str = 'Shapenet ID: %s' % obj_shapenet_id
@@ -447,9 +450,18 @@ def main(args, global_dict):
             seg_idxs.append(obj_inds)
         
         target_obj_pcd_obs = np.concatenate(obj_pcd_pts, axis=0)  # object shape point cloud
+        
+        if args.sampled_points_num > 0: # set to 0 to disable sampling
+            n_total = target_obj_pcd_obs.shape[0]
+            n_sample = min(n_total, args.sampled_points_num)
+            sampled_idx = np.random.permutation(n_total)[:n_sample]
+            target_obj_pcd_obs = target_obj_pcd_obs[sampled_idx, :]
+        
         target_pts_mean = np.mean(target_obj_pcd_obs, axis=0)
         inliers = np.where(np.linalg.norm(target_obj_pcd_obs - target_pts_mean, 2, 1) < 0.2)[0]
         target_obj_pcd_obs = target_obj_pcd_obs[inliers]
+
+
         
         if obj_class == 'mug':
             rack_color = p.getVisualShapeData(table_id)[rack_link_id][7]
@@ -793,6 +805,8 @@ if __name__ == "__main__":
     # custom arguments
     parser.add_argument('--depth_noise', type=str, default="none", choices=["none", "gaussian"])
     parser.add_argument('--gaussian_std', type=float, default=0.02, help="ratio of std dev of gaussian noise to mean on depth map)")
+    parser.add_argument('--sampled_points_num', type=int, default=0, 
+        help="number of sampled object points as input, default 0 for no sampling")
 
     args = parser.parse_args()
 
@@ -806,6 +820,9 @@ if __name__ == "__main__":
     expstr = 'exp--' + str(args.exp)
     if args.depth_noise == "gaussian":
         expstr = expstr + f"_gaussian_noise_{args.gaussian_std}"
+
+    if args.sampled_points_num > 0:
+        expstr = expstr + f"_sample_{args.sampled_points_num}"
 
     modelstr = 'model--' + str(args.model_path)
     seedstr = 'seed--' + str(args.seed)

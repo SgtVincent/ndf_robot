@@ -69,6 +69,9 @@ class VNNOccNet(nn.Module):
         self.latent_dim = latent_dim
         self.scaling = scaling  # scaling up the point cloud/query points to be larger helps
         self.return_features = return_features
+        
+        # NOTE: self.encoder is a normal point cloud encoder, which corresponds to E(P) in paper
+        # this encoder could be dgcnn or pointnet 
 
         if model_type == 'dgcnn':
             self.model_type = 'dgcnn'
@@ -76,6 +79,9 @@ class VNNOccNet(nn.Module):
         else:
             self.model_type = 'pointnet'
             self.encoder = VNN_ResnetPointnet(c_dim=latent_dim) # modified resnet-18
+
+        # NOTE: self.decoder is the rest of occupancy network in Figure 2 in paper,
+        # which constructs a hierarchical representation for each query point
 
         self.decoder = DecoderInner(dim=3, z_dim=latent_dim, c_dim=0, hidden_size=latent_dim, leaky=True, sigmoid=sigmoid, return_features=return_features, acts=acts)
 
@@ -171,7 +177,7 @@ class VNN_ResnetPointnet(nn.Module):
 
         net = self.block_4(net)
 
-        # Recude to  B x F
+        # Reduce to  B x F
         net = self.pool(net, dim=-1)
 
         c = self.fc_c(self.actvn_c(net))

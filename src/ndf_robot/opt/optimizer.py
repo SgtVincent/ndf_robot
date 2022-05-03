@@ -129,11 +129,11 @@ class OccNetOptimizer:
 
             rndperm = torch.randperm(demo_shape_pts_cent.size(0))
             demo_model_input = dict(
-                point_cloud=demo_shape_pts_cent[None, rndperm[:n_pts], :], 
-                coords=demo_query_pts_cent_perturbed[None, :opt_pts, :])
+                point_cloud=demo_shape_pts_cent[None, rndperm[:n_pts], :],  # sampled object points
+                coords=demo_query_pts_cent_perturbed[None, :opt_pts, :]) # sampled query points
             out = self.model(demo_model_input)
             # target_act_hat = out['features'].detach()
-            target_latent = self.model.extract_latent(demo_model_input).detach()
+            target_latent = self.model.extract_latent(demo_model_input).detach() # F(T_hat|P_hat) in paper
             target_act_hat = self.model.forward_latent(target_latent, demo_model_input['coords']).detach()
 
             demo_feats_list.append(target_act_hat.squeeze())
