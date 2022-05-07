@@ -12,7 +12,7 @@ from ndf_robot.utils import util, torch_util, trimesh_util, torch3d_util
 from ndf_robot.utils.plotly_save import plot3d
 
 
-class OccNetOptimizer:
+class MultiModalityOptimizer:
     def __init__(self, model, query_pts, query_pts_real_shape=None, opt_iterations=250, 
                  noise_scale=0.0, noise_decay=0.5, single_object=False):
         self.model = model
@@ -133,8 +133,8 @@ class OccNetOptimizer:
                 coords=demo_query_pts_cent_perturbed[None, :opt_pts, :]) # sampled query points
             out = self.model(demo_model_input)
             # target_act_hat = out['features'].detach()
-            target_latent = self.model.extract_latent(demo_model_input).detach() # occupancy_net, object point cloud encoder
-            target_act_hat = self.model.forward_latent(target_latent, demo_model_input['coords']).detach() # F(T_hat|P_hat) in paper
+            target_latent = self.model.extract_latent(demo_model_input).detach() # F(T_hat|P_hat) in paper
+            target_act_hat = self.model.forward_latent(target_latent, demo_model_input['coords']).detach()
 
             demo_feats_list.append(target_act_hat.squeeze())
             demo_latents_list.append(target_latent.squeeze())
@@ -175,7 +175,7 @@ class OccNetOptimizer:
         rand_rot_idx = np.random.randint(self.rot_grid.shape[0], size=M)
         rand_rot_init = torch3d_util.matrix_to_axis_angle(torch.from_numpy(self.rot_grid[rand_rot_idx])).float()
         rand_mat_init = torch_util.angle_axis_to_rotation_matrix(rand_rot_init)
-        rand_mat_init = rand_mat_init.squeeze().float().to(dev) # [M, 4, 4]
+        rand_mat_init = rand_mat_init.squeeze().float().to(dev)
 
         query_pts_cam_cent_rs, query_pts_tf_rs = self._get_query_pts_rs()
         X_rs = query_pts_cam_cent_rs[:opt_pts][None, :, :].repeat((M, 1, 1))

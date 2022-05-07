@@ -311,7 +311,15 @@ def process_xq_rs_data(grasp_data, place_data, shelf=True):
     else:
         return optimizer_gripper_pts_rs, place_demo_rack_pts_rs, None
 
-def post_process_grasp_point(pre_grasp_ee_pose, target_obj_pcd, thin_feature=True, grasp_viz=False, grasp_dist_thresh=0.0025):
+def post_process_grasp_point(
+    pre_grasp_ee_pose, 
+    target_obj_pcd, 
+    thin_feature=True, 
+    grasp_viz=False, 
+    grasp_dist_thresh=0.0025,
+    sampled_points_num=0
+    ):
+
     grasp_pt = pre_grasp_ee_pose[:3]
 
     # o3d_obj_pcd = open3d.geometry.PointCloud()
@@ -320,7 +328,10 @@ def post_process_grasp_point(pre_grasp_ee_pose, target_obj_pcd, thin_feature=Tru
     # down_o3d_pcd = o3d_obj_pcd.voxel_down_sample(0.005)
     # target_obj_voxel_down = np.asarray(down_o3d_pcd.points)
     rix = np.random.permutation(target_obj_pcd.shape[0])
-    target_obj_voxel_down = target_obj_pcd[rix[:int(target_obj_pcd.shape[0]/5)]]
+    if sampled_points_num == 0:
+        target_obj_voxel_down = target_obj_pcd[rix[:int(target_obj_pcd.shape[0]/5)]]
+    else: 
+        target_obj_voxel_down = target_obj_pcd
 
     target_obj_tree = KDTree(target_obj_pcd)
     target_obj_down_tree = KDTree(target_obj_voxel_down)
@@ -337,6 +348,10 @@ def post_process_grasp_point(pre_grasp_ee_pose, target_obj_pcd, thin_feature=Tru
         pts_within_ball = target_obj_voxel_down[new_idxs_within_ball].squeeze()
         pts_within_larger_ball = target_obj_voxel_down[new_idxs_within_larger_ball].squeeze()
         n_pts_within_ball = len(new_idxs_within_ball)
+
+        # NOTE: only used for bypassing error of empty pts_within_larger_ball after downsampling
+        if len(pts_within_larger_ball) == 0:
+            return new_grasp_pt
 
         if n_pts_within_ball > 75:
             break
