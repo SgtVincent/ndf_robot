@@ -43,3 +43,7 @@ def get_ndf_assets():
 
 def get_ndf_model_weights():
     return osp.join(get_ndf_src(), 'model_weights')
+
+
+def get_shapenet_data():
+    return osp.join(get_ndf_data(), 'shapenet_v2')

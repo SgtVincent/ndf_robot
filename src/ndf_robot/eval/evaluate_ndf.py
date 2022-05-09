@@ -644,7 +644,7 @@ def main(args, global_dict):
         # attempt grasp and solve for plan to execute placement with arm
         jnt_pos = grasp_jnt_pos = grasp_plan = None
         place_success = grasp_success = False
-        for g_idx in range(2):
+        for g_idx in range(2): # one for teleport, the other for planning
 
             # reset everything
             robot.pb_client.set_step_sim(False)
@@ -690,7 +690,7 @@ def main(args, global_dict):
                             pre_grasp_ee_pose[:3], pre_grasp_ee_pose[3:])
 
             if grasp_jnt_pos is not None and jnt_pos is not None:
-                if g_idx == 0:
+                if g_idx == 0: # teleport grasper to target position and grasp
                     robot.pb_client.set_step_sim(True)
                     robot.arm.set_jpos(grasp_jnt_pos, ignore_physics=True)
                     robot.arm.eetool.close(ignore_physics=True)

@@ -187,7 +187,6 @@ def main(args, global_dict):
         if link_id is not None:
             p.changeVisualShape(obj_id, link_id, rgbaColor=color)
 
-
     # load all the demo data and look at objects to help decide on query points
     # NOTE: add iterations for place_demo_filenames
     for iteration, fname in enumerate(grasp_demo_filenames):
@@ -218,10 +217,9 @@ def main(args, global_dict):
                 path_util.get_ndf_descriptions(), 'hanging/table/table_rack_tmp.urdf')
             open(tmp_urdf_fname, 'w').write(grasp_data['table_urdf'].item())
             table_id = robot.pb_client.load_urdf(tmp_urdf_fname,
-                                                cfg.TABLE_POS,
-                                                table_ori,
-                                                scaling=cfg.TABLE_SCALING)
-
+                                                 cfg.TABLE_POS,
+                                                 table_ori,
+                                                 scaling=cfg.TABLE_SCALING)
 
             if obj_class == 'mug':
                 rack_link_id = 0
@@ -230,41 +228,42 @@ def main(args, global_dict):
                 rack_link_id = None
                 shelf_link_id = 0
 
-            if cfg.DEMOS.PLACEMENT_SURFACE == 'shelf':
-                placement_link_id = shelf_link_id
-            else:
-                placement_link_id = rack_link_id
+        #     if cfg.DEMOS.PLACEMENT_SURFACE == 'shelf':
+        #         placement_link_id = shelf_link_id
+        #     else:
+        #         placement_link_id = rack_link_id
 
-            optimizer_gripper_pts, rack_optimizer_gripper_pts, shelf_optimizer_gripper_pts = process_xq_data(
-                grasp_data, place_data, shelf=load_shelf)
-            optimizer_gripper_pts_rs, rack_optimizer_gripper_pts_rs, shelf_optimizer_gripper_pts_rs = process_xq_rs_data(
-                grasp_data, place_data, shelf=load_shelf)
+        #     optimizer_gripper_pts, rack_optimizer_gripper_pts, shelf_optimizer_gripper_pts = process_xq_data(
+        #         grasp_data, place_data, shelf=load_shelf)
+        #     optimizer_gripper_pts_rs, rack_optimizer_gripper_pts_rs, shelf_optimizer_gripper_pts_rs = process_xq_rs_data(
+        #         grasp_data, place_data, shelf=load_shelf)
 
-            if cfg.DEMOS.PLACEMENT_SURFACE == 'shelf':
-                print('Using shelf points')
-                place_optimizer_pts = shelf_optimizer_gripper_pts
-                place_optimizer_pts_rs = shelf_optimizer_gripper_pts_rs
-            else:
-                print('Using rack points')
-                place_optimizer_pts = rack_optimizer_gripper_pts
-                place_optimizer_pts_rs = rack_optimizer_gripper_pts_rs
+        #     if cfg.DEMOS.PLACEMENT_SURFACE == 'shelf':
+        #         print('Using shelf points')
+        #         place_optimizer_pts = shelf_optimizer_gripper_pts
+        #         place_optimizer_pts_rs = shelf_optimizer_gripper_pts_rs
+        #     else:
+        #         print('Using rack points')
+        #         place_optimizer_pts = rack_optimizer_gripper_pts
+        #         place_optimizer_pts_rs = rack_optimizer_gripper_pts_rs
 
-        if cfg.DEMOS.PLACEMENT_SURFACE == 'shelf':
-            target_info, rack_target_info, shapenet_id = process_demo_data_shelf(
-                grasp_data, place_data, cfg=None)
-        else:
-            target_info, rack_target_info, shapenet_id = process_demo_data_rack(
-                grasp_data, place_data, cfg=None)
+        # if cfg.DEMOS.PLACEMENT_SURFACE == 'shelf':
+        #     target_info, rack_target_info, shapenet_id = process_demo_data_shelf(
+        #         grasp_data, place_data, cfg=None)
+        # else:
+        #     target_info, rack_target_info, shapenet_id = process_demo_data_rack(
+        #         grasp_data, place_data, cfg=None)
 
-        if cfg.DEMOS.PLACEMENT_SURFACE == 'shelf':
-            rack_target_info['demo_query_pts'] = place_optimizer_pts
-        demo_target_info_list.append(target_info)
-        demo_rack_target_info_list.append(rack_target_info)
-        demo_shapenet_ids.append(shapenet_id)
+        # if cfg.DEMOS.PLACEMENT_SURFACE == 'shelf':
+        #     rack_target_info['demo_query_pts'] = place_optimizer_pts
+        # demo_target_info_list.append(target_info)
+        # demo_rack_target_info_list.append(rack_target_info)
+        # demo_shapenet_ids.append(shapenet_id)
 
         # load a demo object
         # obj_shapenet_id = random.sample(test_object_ids, 1)[0]
-        id_str = f'Shapenet ID: {obj_shapenet_id}' 
+        obj_shapenet_id = grasp_data['shapenet_id']
+        id_str = f'Shapenet ID: {obj_shapenet_id}'
         log_info(id_str)
 
         viz_dict = {}  # will hold information that's useful for post-run visualizations
@@ -378,9 +377,7 @@ def main(args, global_dict):
                                     linkIndexA=-1, linkIndexB=shelf_link_id, enableCollision=False)
             robot.pb_client.set_step_sim(False)
 
-        o_cid = None
         if args.any_pose:
-            o_cid = constraint_obj_world(obj_id, pos, ori)
             robot.pb_client.set_step_sim(False)
         safeCollisionFilterPair(obj_id, table_id, -1, -1, enableCollision=True)
         p.changeDynamics(obj_id, -1, linearDamping=5, angularDamping=5)

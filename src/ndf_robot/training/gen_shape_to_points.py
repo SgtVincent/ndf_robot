@@ -15,15 +15,24 @@ obj_class = 'mug'
 #obj_class = 'bottle'
 
 if __name__ == "__main__":
+    # if obj_class == 'mug':
+    #     # For mugs
+    #     base_path = osp.join(path_util.get_ndf_data(), 'training/ShapeNetCore.v2/03797390')
+    # elif obj_class == 'bowl':
+    #     # For bowls
+    #     base_path = osp.join(path_util.get_ndf_data(), 'training/ShapeNetCore.v2/02880940')
+    # elif obj_class == 'bottle':
+    #     # For bottle
+    #     base_path = osp.join(path_util.get_ndf_data(), 'training/ShapeNetCore.v2/02876657')
     if obj_class == 'mug':
         # For mugs
-        base_path = osp.join(path_util.get_ndf_data(), 'training/ShapeNetCore.v2/03797390')
+        base_path = osp.join(path_util.get_shapenet_data(), '03797390')
     elif obj_class == 'bowl':
         # For bowls
-        base_path = osp.join(path_util.get_ndf_data(), 'training/ShapeNetCore.v2/02880940')
+        base_path = osp.join(path_util.get_shapenet_data(), '02880940')
     elif obj_class == 'bottle':
         # For bottle
-        base_path = osp.join(path_util.get_ndf_data(), 'training/ShapeNetCore.v2/02876657')
+        base_path = osp.join(path_util.get_shapenet_data(), '02876657')
     search_path = osp.join(base_path + "/*/", "models/model_normalized_128.mat")
     shapenet_paths = glob.glob(search_path)
 
