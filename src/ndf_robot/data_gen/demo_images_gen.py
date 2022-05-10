@@ -33,9 +33,10 @@ from ndf_robot.utils import path_util
 from ndf_robot.share.globals import bad_shapenet_mug_ids_list, bad_shapenet_bowls_ids_list, bad_shapenet_bottles_ids_list
 from ndf_robot.utils.franka_ik import FrankaIK
 from ndf_robot.utils.eval_gen_utils import (
-    soft_grasp_close, constraint_grasp_close, constraint_obj_world, constraint_grasp_open,
-    safeCollisionFilterPair, object_is_still_grasped, get_ee_offset, post_process_grasp_point,
-    process_demo_data_rack, process_demo_data_shelf, process_xq_data, process_xq_rs_data,
+    soft_grasp_close, constraint_grasp_close, constraint_obj_world,
+    constraint_grasp_open, safeCollisionFilterPair, object_is_still_grasped,
+    get_ee_offset, post_process_grasp_point, process_demo_data_rack,
+    process_demo_data_shelf, process_xq_data, process_xq_rs_data,
     safeRemoveConstraint,)
 
 
@@ -72,12 +73,7 @@ def main(args, global_dict):
 
     shapenet_obj_dir = global_dict['shapenet_obj_dir']
     obj_class = global_dict['object_class']
-    eval_save_dir = global_dict['eval_save_dir']
-
-    eval_grasp_imgs_dir = osp.join(eval_save_dir, 'grasp_imgs')
-    eval_teleport_imgs_dir = osp.join(eval_save_dir, 'teleport_imgs')
-    util.safe_makedirs(eval_grasp_imgs_dir)
-    util.safe_makedirs(eval_teleport_imgs_dir)
+    demo_imgs_save_dir = global_dict['demo_imgs_save_dir']
 
     test_shapenet_ids = np.loadtxt(osp.join(path_util.get_ndf_share(
     ), '%s_test_object_split.txt' % obj_class), dtype=str).tolist()
@@ -131,18 +127,8 @@ def main(args, global_dict):
             place_demo_filenames.append(place_fname)
         else:
             log_warn(
-                'Could not find corresponding placement demo: %s, skipping ' % place_fname)
-
-    # success_list = []
-    # place_success_list = []
-    # place_success_teleport_list = []
-    # grasp_success_list = []
-
-    demo_shapenet_ids = []
-
-    # get info from all demonstrations
-    demo_target_info_list = []
-    demo_rack_target_info_list = []
+                'Could not find corresponding placement demo: %s, skipping ' %
+                place_fname)
 
     if args.n_demos > 0:
         gp_fns = list(zip(grasp_demo_filenames, place_demo_filenames))
@@ -157,12 +143,6 @@ def main(args, global_dict):
 
     grasp_demo_filenames = grasp_demo_filenames[:args.num_demo]
     place_demo_filenames = place_demo_filenames[:args.num_demo]
-
-    max_bb_volume = 0
-    place_xq_demo_idx = 0
-    grasp_data_list = []
-    place_data_list = []
-    demo_rel_mat_list = []
 
     # reset
     robot.arm.reset(force_reset=True)
@@ -187,40 +167,39 @@ def main(args, global_dict):
         if link_id is not None:
             p.changeVisualShape(obj_id, link_id, rgbaColor=color)
 
-    # load all the demo data and look at objects to help decide on query points
-    # NOTE: add iterations for place_demo_filenames
+    # load all the demo data into simulator and save rgb, depth, seg images
     for iteration, fname in enumerate(grasp_demo_filenames):
+
+        ################ load demo metadata file ###############################
         print('Loading demo from fname: %s' % fname)
+        # grasp demo files and place demo files are paired 
         grasp_demo_fn = grasp_demo_filenames[iteration]
         place_demo_fn = place_demo_filenames[iteration]
         grasp_data = np.load(grasp_demo_fn, allow_pickle=True)
         place_data = np.load(place_demo_fn, allow_pickle=True)
 
-        grasp_data_list.append(grasp_data)
-        place_data_list.append(place_data)
+        # start_ee_pose = grasp_data['ee_pose_world'].tolist()
+        # end_ee_pose = place_data['ee_pose_world'].tolist()
+        # place_rel_mat = util.get_transform(
+        #     pose_frame_target=util.list2pose_stamped(end_ee_pose),
+        #     pose_frame_source=util.list2pose_stamped(start_ee_pose)
+        # )
+        # place_rel_mat = util.matrix_from_pose(place_rel_mat)
 
-        start_ee_pose = grasp_data['ee_pose_world'].tolist()
-        end_ee_pose = place_data['ee_pose_world'].tolist()
-        place_rel_mat = util.get_transform(
-            pose_frame_target=util.list2pose_stamped(end_ee_pose),
-            pose_frame_source=util.list2pose_stamped(start_ee_pose)
-        )
-        place_rel_mat = util.matrix_from_pose(place_rel_mat)
-        demo_rel_mat_list.append(place_rel_mat)
+        task_dict = {grasp_demo_fn.split('/')[-1]: grasp_data, place_demo_fn.split('/')[-1]: place_data}
+        # put table at right spot
+        table_ori = euler2quat([0, 0, np.pi / 2])
+        # this is the URDF that was used in the demos -- make sure we load an identical one
+        tmp_urdf_fname = osp.join(
+            path_util.get_ndf_descriptions(),
+            'hanging/table/table_rack_tmp.urdf')
+        open(tmp_urdf_fname, 'w').write(grasp_data['table_urdf'].item())
+        table_id = robot.pb_client.load_urdf(tmp_urdf_fname,
+                                             cfg.TABLE_POS,
+                                             table_ori,
+                                             scaling=cfg.TABLE_SCALING)
 
         if iteration == 0:
-            # put table at right spot
-            table_ori = euler2quat([0, 0, np.pi / 2])
-
-            # this is the URDF that was used in the demos -- make sure we load an identical one
-            tmp_urdf_fname = osp.join(
-                path_util.get_ndf_descriptions(), 'hanging/table/table_rack_tmp.urdf')
-            open(tmp_urdf_fname, 'w').write(grasp_data['table_urdf'].item())
-            table_id = robot.pb_client.load_urdf(tmp_urdf_fname,
-                                                 cfg.TABLE_POS,
-                                                 table_ori,
-                                                 scaling=cfg.TABLE_SCALING)
-
             if obj_class == 'mug':
                 rack_link_id = 0
                 shelf_link_id = 1
@@ -228,233 +207,240 @@ def main(args, global_dict):
                 rack_link_id = None
                 shelf_link_id = 0
 
-        #     if cfg.DEMOS.PLACEMENT_SURFACE == 'shelf':
-        #         placement_link_id = shelf_link_id
-        #     else:
-        #         placement_link_id = rack_link_id
+        # generate reference images for two tasks separately
+        for task_fn, task_data in task_dict.items():
 
-        #     optimizer_gripper_pts, rack_optimizer_gripper_pts, shelf_optimizer_gripper_pts = process_xq_data(
-        #         grasp_data, place_data, shelf=load_shelf)
-        #     optimizer_gripper_pts_rs, rack_optimizer_gripper_pts_rs, shelf_optimizer_gripper_pts_rs = process_xq_rs_data(
-        #         grasp_data, place_data, shelf=load_shelf)
+            ###################### load a demo object ###########################
 
-        #     if cfg.DEMOS.PLACEMENT_SURFACE == 'shelf':
-        #         print('Using shelf points')
-        #         place_optimizer_pts = shelf_optimizer_gripper_pts
-        #         place_optimizer_pts_rs = shelf_optimizer_gripper_pts_rs
-        #     else:
-        #         print('Using rack points')
-        #         place_optimizer_pts = rack_optimizer_gripper_pts
-        #         place_optimizer_pts_rs = rack_optimizer_gripper_pts_rs
+            # obj_shapenet_id = random.sample(test_object_ids, 1)[0]
+            try: # some demo files have empty shapenet_id 
+                obj_shapenet_id = task_data['shapenet_id'][0]
+            except: 
+                obj_shapenet_id = task_fn.split("_")[2].split(".")[0]
+            id_str = f'Shapenet ID: {obj_shapenet_id}'
+            log_info(id_str)
 
-        # if cfg.DEMOS.PLACEMENT_SURFACE == 'shelf':
-        #     target_info, rack_target_info, shapenet_id = process_demo_data_shelf(
-        #         grasp_data, place_data, cfg=None)
-        # else:
-        #     target_info, rack_target_info, shapenet_id = process_demo_data_rack(
-        #         grasp_data, place_data, cfg=None)
-
-        # if cfg.DEMOS.PLACEMENT_SURFACE == 'shelf':
-        #     rack_target_info['demo_query_pts'] = place_optimizer_pts
-        # demo_target_info_list.append(target_info)
-        # demo_rack_target_info_list.append(rack_target_info)
-        # demo_shapenet_ids.append(shapenet_id)
-
-        # load a demo object
-        # obj_shapenet_id = random.sample(test_object_ids, 1)[0]
-        obj_shapenet_id = grasp_data['shapenet_id']
-        id_str = f'Shapenet ID: {obj_shapenet_id}'
-        log_info(id_str)
-
-        viz_dict = {}  # will hold information that's useful for post-run visualizations
-        eval_iter_dir = osp.join(eval_save_dir, 'trial_%d' % iteration)
-        util.safe_makedirs(eval_iter_dir)
-
-        if obj_class in ['bottle', 'jar', 'bowl', 'mug']:
-            upright_orientation = common.euler2quat([np.pi/2, 0, 0]).tolist()
-        else:
-            upright_orientation = common.euler2quat([0, 0, 0]).tolist()
-
-        # for testing, use the "normalized" object
-        obj_obj_file = osp.join(
-            shapenet_obj_dir, obj_shapenet_id, 'models/model_normalized.obj')
-        obj_obj_file_dec = obj_obj_file.split('.obj')[0] + '_dec.obj'
-
-        scale_high, scale_low = cfg.MESH_SCALE_HIGH, cfg.MESH_SCALE_LOW
-        scale_default = cfg.MESH_SCALE_DEFAULT
-        if args.rand_mesh_scale:
-            mesh_scale = [np.random.random() * (scale_high -
-                                                scale_low) + scale_low] * 3
-        else:
-            mesh_scale = [scale_default] * 3
-
-        if args.any_pose:
-            if obj_class in ['bowl', 'bottle']:
-                rp = np.random.rand(2) * (2 * np.pi / 3) - (np.pi / 3)
-                ori = common.euler2quat([rp[0], rp[1], 0]).tolist()
+            viz_dict = {}  # will hold information that's useful for post-run visualizations
+            if obj_class in ['bottle', 'jar', 'bowl', 'mug']:
+                upright_orientation = common.euler2quat([np.pi/2, 0, 0]).tolist()
             else:
-                rpy = np.random.rand(3) * (2 * np.pi / 3) - (np.pi / 3)
-                ori = common.euler2quat([rpy[0], rpy[1], rpy[2]]).tolist()
+                upright_orientation = common.euler2quat([0, 0, 0]).tolist()
 
-            pos = [
-                np.random.random() * (x_high - x_low) + x_low,
-                np.random.random() * (y_high - y_low) + y_low,
-                table_z]
-            pose = pos + ori
-            rand_yaw_T = util.rand_body_yaw_transform(
-                pos, min_theta=-np.pi, max_theta=np.pi)
-            pose_w_yaw = util.transform_pose(util.list2pose_stamped(
-                pose), util.pose_from_matrix(rand_yaw_T))
-            pos, ori = util.pose_stamped2list(
-                pose_w_yaw)[:3], util.pose_stamped2list(pose_w_yaw)[3:]
-        else:
-            pos = [np.random.random() * (x_high - x_low) + x_low,
-                   np.random.random() * (y_high - y_low) + y_low, table_z]
-            pose = util.list2pose_stamped(pos + upright_orientation)
-            rand_yaw_T = util.rand_body_yaw_transform(
-                pos, min_theta=-np.pi, max_theta=np.pi)
-            pose_w_yaw = util.transform_pose(
-                pose, util.pose_from_matrix(rand_yaw_T))
-            pos, ori = util.pose_stamped2list(
-                pose_w_yaw)[:3], util.pose_stamped2list(pose_w_yaw)[3:]
-
-        viz_dict['shapenet_id'] = obj_shapenet_id
-        viz_dict['obj_obj_file'] = obj_obj_file
-        if 'normalized' not in shapenet_obj_dir:
-            viz_dict['obj_obj_norm_file'] = osp.join(
-                shapenet_obj_dir + '_normalized', obj_shapenet_id, 'models/model_normalized.obj')
-        else:
-            viz_dict['obj_obj_norm_file'] = osp.join(
+            # for testing, use the "normalized" object
+            obj_obj_file = osp.join(
                 shapenet_obj_dir, obj_shapenet_id, 'models/model_normalized.obj')
-        viz_dict['obj_obj_file_dec'] = obj_obj_file_dec
-        viz_dict['mesh_scale'] = mesh_scale
+            obj_obj_file_dec = obj_obj_file.split('.obj')[0] + '_dec.obj'
 
-        # convert mesh with vhacd
-        if not osp.exists(obj_obj_file_dec):
-            # Volumetric Hierarchical Approximate Decomposition algorithm:
-            # This can import a concave Wavefront .obj file and export a new Wavefront obj file
-            # that contains the convex decomposed parts
-            p.vhacd(
-                obj_obj_file,
-                obj_obj_file_dec,
-                'log.txt',
-                concavity=0.0025,
-                alpha=0.04,
-                beta=0.05,
-                gamma=0.00125,
-                minVolumePerCH=0.0001,
-                resolution=1000000,
-                depth=20,
-                planeDownsampling=4,
-                convexhullDownsampling=4,
-                pca=0,
-                mode=0,
-                convexhullApproximation=1
-            )
+            scale_high, scale_low = cfg.MESH_SCALE_HIGH, cfg.MESH_SCALE_LOW
+            scale_default = cfg.MESH_SCALE_DEFAULT
+            if args.rand_mesh_scale:
+                mesh_scale = [np.random.random() * (scale_high -
+                                                    scale_low) + scale_low] * 3
+            else:
+                mesh_scale = [scale_default] * 3
 
-        robot.arm.go_home(ignore_physics=True)
-        robot.arm.move_ee_xyz([0, 0, 0.2])
+            # region: object pose random initialization
+            # if args.any_pose:
+            #     if obj_class in ['bowl', 'bottle']:
+            #         rp = np.random.rand(2) * (2 * np.pi / 3) - (np.pi / 3)
+            #         ori = common.euler2quat([rp[0], rp[1], 0]).tolist()
+            #     else:
+            #         rpy = np.random.rand(3) * (2 * np.pi / 3) - (np.pi / 3)
+            #         ori = common.euler2quat([rpy[0], rpy[1], rpy[2]]).tolist()
 
-        if args.any_pose:
+            #     pos = [
+            #         np.random.random() * (x_high - x_low) + x_low,
+            #         np.random.random() * (y_high - y_low) + y_low,
+            #         table_z]
+            #     pose = pos + ori
+            #     rand_yaw_T = util.rand_body_yaw_transform(
+            #         pos, min_theta=-np.pi, max_theta=np.pi)
+            #     pose_w_yaw = util.transform_pose(util.list2pose_stamped(
+            #         pose), util.pose_from_matrix(rand_yaw_T))
+            #     pos, ori = util.pose_stamped2list(
+            #         pose_w_yaw)[:3], util.pose_stamped2list(pose_w_yaw)[3:]
+            # else:
+            #     pos = [np.random.random() * (x_high - x_low) + x_low,
+            #            np.random.random() * (y_high - y_low) + y_low, table_z]
+            #     pose = util.list2pose_stamped(pos + upright_orientation)
+            #     rand_yaw_T = util.rand_body_yaw_transform(
+            #         pos, min_theta=-np.pi, max_theta=np.pi)
+            #     pose_w_yaw = util.transform_pose(
+            #         pose, util.pose_from_matrix(rand_yaw_T))
+            #     pos, ori = util.pose_stamped2list(
+            #         pose_w_yaw)[:3], util.pose_stamped2list(pose_w_yaw)[3:]
+            # endregion: object pose random initialization
+
+            viz_dict['shapenet_id'] = obj_shapenet_id
+            viz_dict['obj_obj_file'] = obj_obj_file
+            if 'normalized' not in shapenet_obj_dir:
+                viz_dict['obj_obj_norm_file'] = osp.join(
+                    shapenet_obj_dir + '_normalized', obj_shapenet_id,
+                    'models/model_normalized.obj')
+            else:
+                viz_dict['obj_obj_norm_file'] = osp.join(
+                    shapenet_obj_dir, obj_shapenet_id,
+                    'models/model_normalized.obj')
+            viz_dict['obj_obj_file_dec'] = obj_obj_file_dec
+            viz_dict['mesh_scale'] = mesh_scale
+
+            # convert mesh with vhacd
+            if not osp.exists(obj_obj_file_dec):
+                # Volumetric Hierarchical Approximate Decomposition algorithm:
+                # This can import a concave Wavefront .obj file and export a new Wavefront obj file
+                # that contains the convex decomposed parts
+                p.vhacd(
+                    obj_obj_file,
+                    obj_obj_file_dec,
+                    'log.txt',
+                    concavity=0.0025,
+                    alpha=0.04,
+                    beta=0.05,
+                    gamma=0.00125,
+                    minVolumePerCH=0.0001,
+                    resolution=1000000,
+                    depth=20,
+                    planeDownsampling=4,
+                    convexhullDownsampling=4,
+                    pca=0,
+                    mode=0,
+                    convexhullApproximation=1
+                )
+
+            robot.arm.go_home(ignore_physics=True)
+            # robot.arm.move_ee_xyz([0, 0, 0.2])
+
+            # if args.any_pose:
+            #     robot.pb_client.set_step_sim(True)
+            if obj_class in ['bowl']:
+                robot.pb_client.set_step_sim(True)
+
+            # read position and orientation from metadata
+            pos, ori = task_data['obj_pose_world'][:3], task_data['obj_pose_world'][3:]
+            obj_id = robot.pb_client.load_geom(
+                'mesh',
+                mass=0.01,
+                mesh_scale=mesh_scale,
+                visualfile=obj_obj_file_dec,
+                collifile=obj_obj_file_dec,
+                base_pos=pos,
+                base_ori=ori)
+            p.changeDynamics(obj_id, -1, lateralFriction=0.5)
+
+            if obj_class == 'bowl':
+                safeCollisionFilterPair(
+                    bodyUniqueIdA=obj_id, bodyUniqueIdB=table_id, linkIndexA=-1,
+                    linkIndexB=rack_link_id, enableCollision=False)
+                safeCollisionFilterPair(
+                    bodyUniqueIdA=obj_id, bodyUniqueIdB=table_id, linkIndexA=-1,
+                    linkIndexB=shelf_link_id, enableCollision=False)
+                robot.pb_client.set_step_sim(False)
+
+            if args.any_pose:
+                robot.pb_client.set_step_sim(False)
+            safeCollisionFilterPair(obj_id, table_id, -1, -1, enableCollision=True)
+            p.changeDynamics(obj_id, -1, linearDamping=5, angularDamping=5)
+            time.sleep(1.5)
+
+            # hide_link(table_id, rack_link_id)
+
+            ############ teleport robot arm to ground truth pose ###########
+            
+            # turn OFF collisions between robot and object / table, and move to pre-grasp pose
+            for i in range(p.getNumJoints(robot.arm.robot_id)):
+                safeCollisionFilterPair(
+                    bodyUniqueIdA=robot.arm.robot_id, bodyUniqueIdB=table_id, linkIndexA=i,
+                    linkIndexB=-1, enableCollision=False,
+                    physicsClientId=robot.pb_client.get_client_id())
+                safeCollisionFilterPair(
+                    bodyUniqueIdA=robot.arm.robot_id, bodyUniqueIdB=obj_id, linkIndexA=i,
+                    linkIndexB=-1, enableCollision=False,
+                    physicsClientId=robot.pb_client.get_client_id())
+            
+            task_jnt_pos = task_data['robot_joints']
+            robot.arm.eetool.open()
             robot.pb_client.set_step_sim(True)
-        if obj_class in ['bowl']:
-            robot.pb_client.set_step_sim(True)
+            robot.arm.set_jpos(task_jnt_pos, ignore_physics=True)
+            robot.arm.eetool.close(ignore_physics=True)
+            time.sleep(0.2)
 
-        obj_id = robot.pb_client.load_geom(
-            'mesh',
-            mass=0.01,
-            mesh_scale=mesh_scale,
-            visualfile=obj_obj_file_dec,
-            collifile=obj_obj_file_dec,
-            base_pos=pos,
-            base_ori=ori)
-        p.changeDynamics(obj_id, -1, lateralFriction=0.5)
+            # get object point cloud
+            depth_imgs = []
+            seg_idxs = []
+            obj_pcd_pts = []
+            table_pcd_pts = []
+            rack_pcd_pts = []
 
-        if obj_class == 'bowl':
-            safeCollisionFilterPair(bodyUniqueIdA=obj_id, bodyUniqueIdB=table_id,
-                                    linkIndexA=-1, linkIndexB=rack_link_id, enableCollision=False)
-            safeCollisionFilterPair(bodyUniqueIdA=obj_id, bodyUniqueIdB=table_id,
-                                    linkIndexA=-1, linkIndexB=shelf_link_id, enableCollision=False)
-            robot.pb_client.set_step_sim(False)
+            obj_pose_world = p.getBasePositionAndOrientation(obj_id)
+            obj_pose_world = util.list2pose_stamped(
+                list(obj_pose_world[0]) + list(obj_pose_world[1]))
+            viz_dict['start_obj_pose'] = util.pose_stamped2list(obj_pose_world)
+            
+            ################# take images from simulator ########################
 
-        if args.any_pose:
-            robot.pb_client.set_step_sim(False)
-        safeCollisionFilterPair(obj_id, table_id, -1, -1, enableCollision=True)
-        p.changeDynamics(obj_id, -1, linearDamping=5, angularDamping=5)
-        time.sleep(1.5)
+            task_imgs_save_dir = osp.join(demo_imgs_save_dir, task_fn.split('.')[0])
+            util.safe_makedirs(task_imgs_save_dir)
 
-        hide_link(table_id, rack_link_id)
+            for i, cam in enumerate(cams.cams):
+                # get image and raw point cloud
+                rgb, depth, seg = cam.get_images(
+                    get_rgb=True, get_depth=True, get_seg=True)
+                
+                # Add noise
+                if args.depth_noise == "gaussian":
+                    min_depth = depth.min()
+                    # noise type: random noise of pixel-wise < 2% noise
+                    # given Intel Realsense noise is < 2%
+                    depth_noise = np.multiply((np.random.rand(
+                        depth.shape[0],
+                        depth.shape[1]) - 0.5),
+                        depth) * 2 * args.gaussian_std
+                    depth += depth_noise
+                    depth[depth <= 0.0] = min_depth / 2.0  # min depth clip
 
-        # get object point cloud
-        depth_imgs = []
-        seg_idxs = []
-        obj_pcd_pts = []
-        table_pcd_pts = []
-        rack_pcd_pts = []
+                # save images
+                Image.fromarray(rgb.astype(np.uint8)).save(
+                    osp.join(task_imgs_save_dir, f"rgb_cam_{i}.png"))
+                Image.fromarray(depth.astype(np.uint8)).save(
+                    osp.join(task_imgs_save_dir, f"depth_cam_{i}.png"))
+                Image.fromarray(seg.astype(np.uint8)).save(
+                    osp.join(task_imgs_save_dir, f"seg_cam_{i}.png"))
 
-        obj_pose_world = p.getBasePositionAndOrientation(obj_id)
-        obj_pose_world = util.list2pose_stamped(
-            list(obj_pose_world[0]) + list(obj_pose_world[1]))
-        viz_dict['start_obj_pose'] = util.pose_stamped2list(obj_pose_world)
-        image_save_dir = osp.join(args.data_dir, "images")
+                # region: save point cloud, not used now
+                # pts_raw, _ = cam.get_pcd(
+                #     in_world=True, rgb_image=rgb, depth_image=depth, depth_min=0.0,
+                #     depth_max=np.inf)
 
-        for i, cam in enumerate(cams.cams):
-            # get image and raw point cloud
-            rgb, depth, seg = cam.get_images(
-                get_rgb=True, get_depth=True, get_seg=True)
+                # # flatten and find corresponding pixels in segmentation mask
+                # flat_seg = seg.flatten()
+                # flat_depth = depth.flatten()
+                # obj_inds = np.where(flat_seg == obj_id)
+                # table_inds = np.where(flat_seg == table_id)
+                # seg_depth = flat_depth[obj_inds[0]]
 
-            # save images
-            cam_image_save_dir = osp.join(image_save_dir, obj_class, f"cam_{i}")
-            if not osp.exists(cam_image_save_dir):
-                os.makedirs(cam_image_save_dir)
-            Image.fromarray(rgb.astype(np.uint8)).save(
-                osp.join(cam_image_save_dir, f"{obj_shapenet_id}_rgb.png"))
-            Image.fromarray(depth.astype(np.uint8)).save(
-                osp.join(cam_image_save_dir, f"{obj_shapenet_id}_depth.png"))
-            Image.fromarray(seg.astype(np.uint8)).save(
-                osp.join(cam_image_save_dir, f"{obj_shapenet_id}_seg.png"))
+                # obj_pts = pts_raw[obj_inds[0], :]
+                # obj_pcd_pts.append(util.crop_pcd(obj_pts))
+                # table_pts = pts_raw[table_inds[0],
+                #                     :][::int(table_inds[0].shape[0]/500)]
+                # table_pcd_pts.append(table_pts)
 
-            # # Add noise
-            if args.depth_noise == "gaussian":
-                min_depth = depth.min()
-                # noise type: random noise of pixel-wise < 2% noise
-                # given Intel Realsense noise is < 2%
-                depth_noise = np.multiply((np.random.rand(
-                    depth.shape[0], depth.shape[1]) - 0.5), depth) * 2 * args.gaussian_std
-                depth += depth_noise
-                depth[depth <= 0.0] = min_depth / 2.0  # min depth clip
-            pts_raw, _ = cam.get_pcd(
-                in_world=True, rgb_image=rgb, depth_image=depth, depth_min=0.0, depth_max=np.inf)
+                # if rack_link_id is not None:
+                #     rack_val = table_id + ((rack_link_id+1) << 24)
+                #     rack_inds = np.where(flat_seg == rack_val)
+                #     if rack_inds[0].shape[0] > 0:
+                #         rack_pts = pts_raw[rack_inds[0], :]
+                #         rack_pcd_pts.append(rack_pts)
 
-            # flatten and find corresponding pixels in segmentation mask
-            flat_seg = seg.flatten()
-            flat_depth = depth.flatten()
-            obj_inds = np.where(flat_seg == obj_id)
-            table_inds = np.where(flat_seg == table_id)
-            seg_depth = flat_depth[obj_inds[0]]
+                # depth_imgs.append(seg_depth)
+                # seg_idxs.append(obj_inds)
+                # endregion
+            
+            # target_obj_pcd_obs = np.concatenate(
+            #     obj_pcd_pts, axis=0)  # object shape point cloud
 
-            obj_pts = pts_raw[obj_inds[0], :]
-            obj_pcd_pts.append(util.crop_pcd(obj_pts))
-            table_pts = pts_raw[table_inds[0],
-                                :][::int(table_inds[0].shape[0]/500)]
-            table_pcd_pts.append(table_pts)
-
-            if rack_link_id is not None:
-                rack_val = table_id + ((rack_link_id+1) << 24)
-                rack_inds = np.where(flat_seg == rack_val)
-                if rack_inds[0].shape[0] > 0:
-                    rack_pts = pts_raw[rack_inds[0], :]
-                    rack_pcd_pts.append(rack_pts)
-
-            depth_imgs.append(seg_depth)
-            seg_idxs.append(obj_inds)
-
-        # target_obj_pcd_obs = np.concatenate(
-        #     obj_pcd_pts, axis=0)  # object shape point cloud
-
-        robot.arm.go_home(ignore_physics=True)
-        # deleted unused code here
-        robot.pb_client.remove_body(obj_id)
+            robot.arm.go_home(ignore_physics=True)
+            # deleted unused code here
+            robot.pb_client.remove_body(obj_id)
 
 
 if __name__ == "__main__":
@@ -463,7 +449,7 @@ if __name__ == "__main__":
     parser.add_argument('--seed', type=int, default=0)
     parser.add_argument('--num_samples', type=int, default=100)
     parser.add_argument('--data_dir', type=str, default='data')
-    parser.add_argument('--eval_data_dir', type=str, default='eval_data')
+    parser.add_argument('--demo_imgs_save_dir', type=str, default='demo_images')
     parser.add_argument('--demo_exp', type=str, default='debug_label')
     parser.add_argument('--exp', type=str, default='debug_eval')
     parser.add_argument('--object_class', type=str, default='mug')
@@ -510,12 +496,15 @@ if __name__ == "__main__":
     # custom arguments
     parser.add_argument('--depth_noise', type=str,
                         default="none", choices=["none", "gaussian"])
-    parser.add_argument('--gaussian_std', type=float, default=0.02,
-                        help="ratio of std dev of gaussian noise to mean on depth map)")
-    parser.add_argument('--sampled_points_num', type=int, default=0,
-                        help="number of sampled object points as input, default 0 for no sampling")
-    parser.add_argument('--modality', type=str, default="3d", choices=["3d", "2d3d"],
-                        help="data modalities used for pose estimation")
+    parser.add_argument(
+        '--gaussian_std', type=float, default=0.02,
+        help="ratio of std dev of gaussian noise to mean on depth map)")
+    parser.add_argument(
+        '--sampled_points_num', type=int, default=0,
+        help="number of sampled object points as input, default 0 for no sampling")
+    parser.add_argument(
+        '--modality', type=str, default="3d", choices=["3d", "2d3d"],
+        help="data modalities used for pose estimation")
 
     args = parser.parse_args()
 
@@ -523,10 +512,13 @@ if __name__ == "__main__":
 
     obj_class = args.object_class
     shapenet_obj_dir = osp.join(
-        path_util.get_ndf_obj_descriptions(), obj_class + '_centered_obj_normalized')
+        path_util.get_ndf_obj_descriptions(),
+        obj_class + '_centered_obj_normalized')
 
     demo_load_dir = osp.join(path_util.get_ndf_data(),
                              'demos', obj_class, args.demo_exp)
+    demo_imgs_save_dir = osp.join(path_util.get_ndf_data(), 
+        args.demo_imgs_save_dir, obj_class, args.demo_exp)
 
     expstr = 'exp--' + str(args.exp)
     if args.depth_noise == "gaussian":
@@ -538,9 +530,7 @@ if __name__ == "__main__":
     modelstr = 'model--' + str(args.model_path)
     seedstr = 'seed--' + str(args.seed)
     full_experiment_name = '_'.join([expstr, modelstr, seedstr])
-    eval_save_dir = osp.join(path_util.get_ndf_eval_data(
-    ), args.eval_data_dir, full_experiment_name)
-    util.safe_makedirs(eval_save_dir)
+
 
     vnn_model_path = osp.join(
         path_util.get_ndf_model_weights(), args.model_path + '.pth')
@@ -548,7 +538,7 @@ if __name__ == "__main__":
     global_dict = dict(
         shapenet_obj_dir=shapenet_obj_dir,
         demo_load_dir=demo_load_dir,
-        eval_save_dir=eval_save_dir,
+        demo_imgs_save_dir=demo_imgs_save_dir,
         object_class=obj_class,
         vnn_checkpoint_path=vnn_model_path
     )
