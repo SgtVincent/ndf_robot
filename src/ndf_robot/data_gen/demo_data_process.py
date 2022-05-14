@@ -10,8 +10,9 @@ import signal
 import torch
 import argparse
 import shutil
-import copy 
-
+import copy
+import open3d as o3d
+import matplotlib.pyplot as plt
 import pybullet as p
 
 from airobot import Robot
@@ -142,8 +143,8 @@ def main(args, global_dict):
     else:
         log_warn('USING ALL %d DEMONSTRATIONS' % len(grasp_demo_filenames))
 
-    grasp_demo_filenames = grasp_demo_filenames[:args.num_demo]
-    place_demo_filenames = place_demo_filenames[:args.num_demo]
+    # grasp_demo_filenames = grasp_demo_filenames[:args.num_demo]
+    # place_demo_filenames = place_demo_filenames[:args.num_demo]
 
     # reset
     robot.arm.reset(force_reset=True)
@@ -187,8 +188,9 @@ def main(args, global_dict):
         # )
         # place_rel_mat = util.matrix_from_pose(place_rel_mat)
 
-        task_dict = {grasp_demo_fn.split(
-            '/')[-1]: grasp_data, place_demo_fn.split('/')[-1]: place_data}
+        # task_dict = {grasp_demo_fn.split(
+        #     '/')[-1]: grasp_data, place_demo_fn.split('/')[-1]: place_data}
+        task_dict = {grasp_demo_fn: grasp_data, place_demo_fn: place_data}
         # put table at right spot
         table_ori = euler2quat([0, 0, np.pi / 2])
         # this is the URDF that was used in the demos -- make sure we load an identical one
@@ -210,10 +212,10 @@ def main(args, global_dict):
                 shelf_link_id = 0
 
         # generate reference images for two tasks separately
-        for task_fn, task_data in task_dict.items():
+        for task_file_path, task_data in task_dict.items():
 
             ###################### load a demo object ###########################
-
+            task_fn = task_file_path.split('/')[-1]
             # obj_shapenet_id = random.sample(test_object_ids, 1)[0]
             try:  # some demo files have empty shapenet_id
                 obj_shapenet_id = task_data['shapenet_id'][0]
@@ -223,6 +225,7 @@ def main(args, global_dict):
             log_info(id_str)
 
             viz_dict = {}  # will hold information that's useful for post-run visualizations
+
             if obj_class in ['bottle', 'jar', 'bowl', 'mug']:
                 upright_orientation = common.euler2quat(
                     [np.pi / 2, 0, 0]).tolist()
@@ -316,8 +319,9 @@ def main(args, global_dict):
 
             # if args.any_pose:
             #     robot.pb_client.set_step_sim(True)
-            if obj_class in ['bowl']:
-                robot.pb_client.set_step_sim(True)
+            # if obj_class in ['bowl']:
+            # NOTE: if not set simulator to step mode, bottles will fall down
+            robot.pb_client.set_step_sim(True)
 
             # read position and orientation from metadata
             pos, ori = task_data['obj_pose_world'][
@@ -384,16 +388,24 @@ def main(args, global_dict):
             viz_dict['start_obj_pose'] = util.pose_stamped2list(obj_pose_world)
 
             ################# save images from simulator ########################
-            if args.save_images:
+            if args.save_images or args.debug:
 
                 task_imgs_save_dir = osp.join(
                     demo_imgs_save_dir, task_fn.split('.')[0])
                 util.safe_makedirs(task_imgs_save_dir)
-
+                
+                # saved to demo files 
+                int_mats = []
+                ext_mats = []
+                # rgb_images = []
                 for i, cam in enumerate(cams.cams):
                     # get image and raw point cloud
                     rgb, depth, seg = cam.get_images(
                         get_rgb=True, get_depth=True, get_seg=True)
+                    int_mats.append(cam.cam_int_mat)
+                    ext_mats.append(np.linalg.inv(cam.cam_ext_mat))
+                    # rgb_images.append(rgb)
+                    
 
                     # Add noise
                     if args.depth_noise == "gaussian":
@@ -407,13 +419,44 @@ def main(args, global_dict):
                         depth += depth_noise
                         depth[depth <= 0.0] = min_depth / 2.0  # min depth clip
 
-                    # save images
-                    Image.fromarray(rgb.astype(np.uint8)).save(
-                        osp.join(task_imgs_save_dir, f"rgb_cam_{i}.png"))
-                    Image.fromarray(depth.astype(np.uint8)).save(
-                        osp.join(task_imgs_save_dir, f"depth_cam_{i}.png"))
-                    Image.fromarray(seg.astype(np.uint8)).save(
-                        osp.join(task_imgs_save_dir, f"seg_cam_{i}.png"))
+                    if args.save_images:  # save images
+                        Image.fromarray(rgb.astype(np.uint8)).save(
+                            osp.join(task_imgs_save_dir, f"rgb_cam_{i}.png"))
+                        Image.fromarray(depth.astype(np.uint8)).save(
+                            osp.join(task_imgs_save_dir, f"depth_cam_{i}.png"))
+                        Image.fromarray(seg.astype(np.uint8)).save(
+                            osp.join(task_imgs_save_dir, f"seg_cam_{i}.png"))
+                    else:  # debug
+
+                        pcd_pts, pcd_rgb = cam.get_pcd(
+                            in_world=True, rgb_image=rgb, depth_image=depth,
+                            depth_min=0.0, depth_max=np.inf)
+                        pcd_o3d = o3d.t.geometry.PointCloud()
+                        pcd_o3d.point["positions"] = o3d.core.Tensor(
+                            pcd_pts, dtype=o3d.core.float32)
+                        intrinsic_mat = o3d.core.Tensor(
+                            cam.cam_int_mat, dtype=o3d.core.float32)
+                        # NOTE: cam.cam_ext_mat: camera frame -> world frame
+                        extrinsic_mat = o3d.core.Tensor(
+                            np.linalg.inv(cam.cam_ext_mat),
+                            dtype=o3d.core.float32)
+                        # extrinsic_mat = o3d.core.Tensor(
+                        #     cam.view_matrix, dtype=o3d.core.float32)
+
+                        depth_project = pcd_o3d.project_to_depth_image(
+                            width=depth.shape[1],
+                            height=depth.shape[0],
+                            intrinsics=intrinsic_mat,
+                            extrinsics=extrinsic_mat,
+                            depth_scale=cam.depth_scale,
+                            depth_max=10.0).as_tensor().numpy().squeeze()
+
+                        fig = plt.figure(figsize=(10, 10))
+                        fig.add_subplot(1, 2, 1)
+                        plt.imshow(depth)
+                        fig.add_subplot(1, 2, 2)
+                        plt.imshow(depth_project)
+                        plt.show(block=True)
 
                     # region: save point cloud, not used now
                     # pts_raw, _ = cam.get_pcd(
@@ -448,7 +491,9 @@ def main(args, global_dict):
                 #     obj_pcd_pts, axis=0)  # object shape point cloud
 
             ###### get closest points on object as contact query points #######
+            
             if args.save_contact_pts:
+                demo_update_dict = {}  # extra information to write back to demo files
                 ee_pose_world = task_data['ee_pose_world'].tolist()
 
                 gripper_closest_points = p.getClosestPoints(
@@ -460,15 +505,22 @@ def main(args, global_dict):
 
                 # sort by distance to the object
                 sorted(gripper_closest_points, key=lambda pt_info: pt_info[8])
-                gripper_contact_pose = copy.deepcopy(ee_pose_world)
-                if len(gripper_closest_points):
-                    for i, pt in enumerate(gripper_closest_points):
-                        print(pt[8])
-                    gripper_contact_pose[: 3] = np.asarray(
-                        gripper_closest_points[0][5])
-
-
-
+                # gripper_contact_pose = copy.deepcopy(ee_pose_world)
+                # if len(gripper_closest_points):
+                #     for i, pt in enumerate(gripper_closest_points):
+                #         print(pt[8])
+                #     gripper_contact_pose[: 3] = np.asarray(
+                #         gripper_closest_points[0][5])
+                
+                # write back updated to demo files 
+                task_data_dict = dict(task_data)
+                task_data_dict.update({
+                    "contact_points": gripper_closest_points,
+                    "instrinsic_matrices": int_mats,
+                    "extrinsic_matrices": ext_mats,
+                })
+                np.savez(task_file_path, **task_data_dict)
+            
             robot.arm.go_home(ignore_physics=True)
             # deleted unused code here
             robot.pb_client.remove_body(obj_id)
@@ -514,7 +566,7 @@ if __name__ == "__main__":
         '--gaussian_std', type=float, default=0.02,
         help="ratio of std dev of gaussian noise to mean on depth map)")
     parser.add_argument('--save_images', action='store_true')
-
+    parser.add_argument('--save_contact_pts', action='store_true')
     args = parser.parse_args()
 
     signal.signal(signal.SIGINT, util.signal_handler)
@@ -533,9 +585,6 @@ if __name__ == "__main__":
     expstr = 'exp--' + str(args.exp)
     if args.depth_noise == "gaussian":
         expstr = expstr + f"_gaussian_noise_{args.gaussian_std}"
-
-    if args.sampled_points_num > 0:
-        expstr = expstr + f"_sample_{args.sampled_points_num}"
 
     modelstr = 'model--' + str(args.model_path)
     seedstr = 'seed--' + str(args.seed)

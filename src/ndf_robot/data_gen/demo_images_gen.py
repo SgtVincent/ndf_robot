@@ -172,7 +172,7 @@ def main(args, global_dict):
 
         ################ load demo metadata file ###############################
         print('Loading demo from fname: %s' % fname)
-        # grasp demo files and place demo files are paired 
+        # grasp demo files and place demo files are paired
         grasp_demo_fn = grasp_demo_filenames[iteration]
         place_demo_fn = place_demo_filenames[iteration]
         grasp_data = np.load(grasp_demo_fn, allow_pickle=True)
@@ -186,7 +186,8 @@ def main(args, global_dict):
         # )
         # place_rel_mat = util.matrix_from_pose(place_rel_mat)
 
-        task_dict = {grasp_demo_fn.split('/')[-1]: grasp_data, place_demo_fn.split('/')[-1]: place_data}
+        task_dict = {grasp_demo_fn.split(
+            '/')[-1]: grasp_data, place_demo_fn.split('/')[-1]: place_data}
         # put table at right spot
         table_ori = euler2quat([0, 0, np.pi / 2])
         # this is the URDF that was used in the demos -- make sure we load an identical one
@@ -213,22 +214,24 @@ def main(args, global_dict):
             ###################### load a demo object ###########################
 
             # obj_shapenet_id = random.sample(test_object_ids, 1)[0]
-            try: # some demo files have empty shapenet_id 
+            try:  # some demo files have empty shapenet_id
                 obj_shapenet_id = task_data['shapenet_id'][0]
-            except: 
+            except:
                 obj_shapenet_id = task_fn.split("_")[2].split(".")[0]
             id_str = f'Shapenet ID: {obj_shapenet_id}'
             log_info(id_str)
 
             viz_dict = {}  # will hold information that's useful for post-run visualizations
             if obj_class in ['bottle', 'jar', 'bowl', 'mug']:
-                upright_orientation = common.euler2quat([np.pi/2, 0, 0]).tolist()
+                upright_orientation = common.euler2quat(
+                    [np.pi / 2, 0, 0]).tolist()
             else:
                 upright_orientation = common.euler2quat([0, 0, 0]).tolist()
 
             # for testing, use the "normalized" object
             obj_obj_file = osp.join(
-                shapenet_obj_dir, obj_shapenet_id, 'models/model_normalized.obj')
+                shapenet_obj_dir, obj_shapenet_id,
+                'models/model_normalized.obj')
             obj_obj_file_dec = obj_obj_file.split('.obj')[0] + '_dec.obj'
 
             scale_high, scale_low = cfg.MESH_SCALE_HIGH, cfg.MESH_SCALE_LOW
@@ -316,7 +319,9 @@ def main(args, global_dict):
                 robot.pb_client.set_step_sim(True)
 
             # read position and orientation from metadata
-            pos, ori = task_data['obj_pose_world'][:3], task_data['obj_pose_world'][3:]
+            pos, ori = task_data['obj_pose_world'][
+                : 3], task_data['obj_pose_world'][
+                3:]
             obj_id = robot.pb_client.load_geom(
                 'mesh',
                 mass=0.01,
@@ -338,25 +343,26 @@ def main(args, global_dict):
 
             if args.any_pose:
                 robot.pb_client.set_step_sim(False)
-            safeCollisionFilterPair(obj_id, table_id, -1, -1, enableCollision=True)
+            safeCollisionFilterPair(
+                obj_id, table_id, -1, -1, enableCollision=True)
             p.changeDynamics(obj_id, -1, linearDamping=5, angularDamping=5)
             time.sleep(1.5)
 
-            # hide_link(table_id, rack_link_id)
+            hide_link(table_id, rack_link_id)
 
             ############ teleport robot arm to ground truth pose ###########
-            
+
             # turn OFF collisions between robot and object / table, and move to pre-grasp pose
             for i in range(p.getNumJoints(robot.arm.robot_id)):
                 safeCollisionFilterPair(
-                    bodyUniqueIdA=robot.arm.robot_id, bodyUniqueIdB=table_id, linkIndexA=i,
-                    linkIndexB=-1, enableCollision=False,
+                    bodyUniqueIdA=robot.arm.robot_id, bodyUniqueIdB=table_id,
+                    linkIndexA=i, linkIndexB=-1, enableCollision=False,
                     physicsClientId=robot.pb_client.get_client_id())
                 safeCollisionFilterPair(
-                    bodyUniqueIdA=robot.arm.robot_id, bodyUniqueIdB=obj_id, linkIndexA=i,
-                    linkIndexB=-1, enableCollision=False,
+                    bodyUniqueIdA=robot.arm.robot_id, bodyUniqueIdB=obj_id,
+                    linkIndexA=i, linkIndexB=-1, enableCollision=False,
                     physicsClientId=robot.pb_client.get_client_id())
-            
+
             task_jnt_pos = task_data['robot_joints']
             robot.arm.eetool.open()
             robot.pb_client.set_step_sim(True)
@@ -375,17 +381,18 @@ def main(args, global_dict):
             obj_pose_world = util.list2pose_stamped(
                 list(obj_pose_world[0]) + list(obj_pose_world[1]))
             viz_dict['start_obj_pose'] = util.pose_stamped2list(obj_pose_world)
-            
+
             ################# take images from simulator ########################
 
-            task_imgs_save_dir = osp.join(demo_imgs_save_dir, task_fn.split('.')[0])
+            task_imgs_save_dir = osp.join(
+                demo_imgs_save_dir, task_fn.split('.')[0])
             util.safe_makedirs(task_imgs_save_dir)
 
             for i, cam in enumerate(cams.cams):
                 # get image and raw point cloud
                 rgb, depth, seg = cam.get_images(
                     get_rgb=True, get_depth=True, get_seg=True)
-                
+
                 # Add noise
                 if args.depth_noise == "gaussian":
                     min_depth = depth.min()
@@ -434,7 +441,7 @@ def main(args, global_dict):
                 # depth_imgs.append(seg_depth)
                 # seg_idxs.append(obj_inds)
                 # endregion
-            
+
             # target_obj_pcd_obs = np.concatenate(
             #     obj_pcd_pts, axis=0)  # object shape point cloud
 
@@ -517,7 +524,8 @@ if __name__ == "__main__":
 
     demo_load_dir = osp.join(path_util.get_ndf_data(),
                              'demos', obj_class, args.demo_exp)
-    demo_imgs_save_dir = osp.join(path_util.get_ndf_data(), 
+    demo_imgs_save_dir = osp.join(
+        path_util.get_ndf_data(),
         args.demo_imgs_save_dir, obj_class, args.demo_exp)
 
     expstr = 'exp--' + str(args.exp)
@@ -530,7 +538,6 @@ if __name__ == "__main__":
     modelstr = 'model--' + str(args.model_path)
     seedstr = 'seed--' + str(args.seed)
     full_experiment_name = '_'.join([expstr, modelstr, seedstr])
-
 
     vnn_model_path = osp.join(
         path_util.get_ndf_model_weights(), args.model_path + '.pth')
