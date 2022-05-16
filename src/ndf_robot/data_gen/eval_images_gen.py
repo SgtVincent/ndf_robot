@@ -404,7 +404,7 @@ def main(args, global_dict):
         p.changeDynamics(obj_id, -1, linearDamping=5, angularDamping=5)
         time.sleep(1.5)
 
-        hide_link(table_id, rack_link_id)
+        # hide_link(table_id, rack_link_id)
 
         # get object point cloud
         depth_imgs = []
@@ -425,15 +425,17 @@ def main(args, global_dict):
                 get_rgb=True, get_depth=True, get_seg=True)
 
             # save images
-            cam_image_save_dir = osp.join(image_save_dir, obj_class, f"cam_{i}")
-            if not osp.exists(cam_image_save_dir):
-                os.makedirs(cam_image_save_dir)
+            obj_image_save_dir = osp.join(image_save_dir, obj_class, obj_shapenet_id)
+            if not osp.exists(obj_image_save_dir):
+                os.makedirs(obj_image_save_dir)
+                # save images
             Image.fromarray(rgb.astype(np.uint8)).save(
-                osp.join(cam_image_save_dir, f"{obj_shapenet_id}_rgb.png"))
+                osp.join(obj_image_save_dir, f"rgb_cam_{i}.png"))
             Image.fromarray(depth.astype(np.uint8)).save(
-                osp.join(cam_image_save_dir, f"{obj_shapenet_id}_depth.png"))
+                osp.join(obj_image_save_dir, f"depth_cam_{i}.png"))
             Image.fromarray(seg.astype(np.uint8)).save(
-                osp.join(cam_image_save_dir, f"{obj_shapenet_id}_seg.png"))
+                osp.join(obj_image_save_dir, f"seg_cam_{i}.png"))
+
 
             # # Add noise
             if args.depth_noise == "gaussian":

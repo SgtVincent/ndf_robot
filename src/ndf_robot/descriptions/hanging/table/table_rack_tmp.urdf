@@ -52,7 +52,7 @@
       </geometry>
     </visual>
   </link>
-  <!-- <joint name="table2rack" type="fixed">
+  <joint name="table2rack" type="fixed">
     <parent link="baseLink"/>
     <child link="rack"/>
     <origin rpy="0 0 3.1415" xyz="0.3 -0.1 0.635"/> 
@@ -74,8 +74,8 @@
     <contact>
       <lateral_friction value="0.2"/>
     </contact>
-  </link> -->
-  <joint name="table2shelf" type="fixed">
+  </link>
+  <!-- <joint name="table2shelf" type="fixed">
     <parent link="baseLink"/>
     <child link="shelf"/>
     <origin rpy="0 0 -1.57" xyz="-0.5 0.125 0.625"/>
@@ -97,6 +97,6 @@
     <contact>
       <lateral_friction value="0.2"/>
     </contact>
-  </link>
+  </link> -->
 </robot>
 

@@ -311,12 +311,15 @@ def main(args, global_dict):
                 )
 
             robot.arm.go_home(ignore_physics=True)
-            # robot.arm.move_ee_xyz([0, 0, 0.2])
+            # change to realtime mode to move arm
+            robot.pb_client.set_step_sim(False)
+            robot.arm.move_ee_xyz([0, 0, 0.5]) # avoid occlusion
 
             # if args.any_pose:
             #     robot.pb_client.set_step_sim(True)
-            if obj_class in ['bowl']:
-                robot.pb_client.set_step_sim(True)
+            # if obj_class in ['bowl']:
+            # change back to step mode to avoid object falling down
+            robot.pb_client.set_step_sim(True)
 
             # read position and orientation from metadata
             pos, ori = task_data['obj_pose_world'][
@@ -348,27 +351,29 @@ def main(args, global_dict):
             p.changeDynamics(obj_id, -1, linearDamping=5, angularDamping=5)
             time.sleep(1.5)
 
-            hide_link(table_id, rack_link_id)
+            # hide_link(table_id, rack_link_id)
 
             ############ teleport robot arm to ground truth pose ###########
+            if args.ground_truth_pose:
+                # turn OFF collisions between robot and object / table, and move to pre-grasp pose
+                for i in range(p.getNumJoints(robot.arm.robot_id)):
+                    safeCollisionFilterPair(
+                        bodyUniqueIdA=robot.arm.robot_id,
+                        bodyUniqueIdB=table_id, linkIndexA=i, linkIndexB=-1,
+                        enableCollision=False,
+                        physicsClientId=robot.pb_client.get_client_id())
+                    safeCollisionFilterPair(
+                        bodyUniqueIdA=robot.arm.robot_id, bodyUniqueIdB=obj_id,
+                        linkIndexA=i, linkIndexB=-1, enableCollision=False,
+                        physicsClientId=robot.pb_client.get_client_id())
 
-            # turn OFF collisions between robot and object / table, and move to pre-grasp pose
-            for i in range(p.getNumJoints(robot.arm.robot_id)):
-                safeCollisionFilterPair(
-                    bodyUniqueIdA=robot.arm.robot_id, bodyUniqueIdB=table_id,
-                    linkIndexA=i, linkIndexB=-1, enableCollision=False,
-                    physicsClientId=robot.pb_client.get_client_id())
-                safeCollisionFilterPair(
-                    bodyUniqueIdA=robot.arm.robot_id, bodyUniqueIdB=obj_id,
-                    linkIndexA=i, linkIndexB=-1, enableCollision=False,
-                    physicsClientId=robot.pb_client.get_client_id())
+                task_jnt_pos = task_data['robot_joints']
+                robot.arm.eetool.open()
+                robot.pb_client.set_step_sim(True)
+                robot.arm.set_jpos(task_jnt_pos, ignore_physics=True)
+                robot.arm.eetool.close(ignore_physics=True)
+                time.sleep(0.2)
 
-            task_jnt_pos = task_data['robot_joints']
-            robot.arm.eetool.open()
-            robot.pb_client.set_step_sim(True)
-            robot.arm.set_jpos(task_jnt_pos, ignore_physics=True)
-            robot.arm.eetool.close(ignore_physics=True)
-            time.sleep(0.2)
 
             # get object point cloud
             depth_imgs = []
@@ -456,44 +461,22 @@ if __name__ == "__main__":
     parser.add_argument('--seed', type=int, default=0)
     parser.add_argument('--num_samples', type=int, default=100)
     parser.add_argument('--data_dir', type=str, default='data')
-    parser.add_argument('--demo_imgs_save_dir', type=str, default='demo_images')
-    parser.add_argument('--demo_exp', type=str, default='debug_label')
+    parser.add_argument('--demo_imgs_save_dir', type=str,
+                        default='demo_images_no_occlusion')
+    parser.add_argument('--demo_exp', type=str, default='test_bottle')
     parser.add_argument('--exp', type=str, default='debug_eval')
-    parser.add_argument('--object_class', type=str, default='mug')
+    parser.add_argument('--object_class', type=str, default='bottle')
     parser.add_argument('--opt_iterations', type=int, default=250)
     parser.add_argument('--num_demo', type=int, default=12,
                         help='number of demos use')
     parser.add_argument('--any_pose', action='store_true')
-    parser.add_argument('--num_iterations', type=int, default=100)
-    parser.add_argument('--resume_iter', type=int, default=0)
-    parser.add_argument('--config', type=str, default='base_cfg')
-    parser.add_argument('--model_path', type=str, required=True)
-    parser.add_argument('--save_vis_per_model', action='store_true')
-    parser.add_argument('--noise_scale', type=float, default=0.05)
-    parser.add_argument('--noise_decay', type=float, default=0.75)
-    parser.add_argument('--pybullet_viz', action='store_true')
-    parser.add_argument('--dgcnn', action='store_true')
-    parser.add_argument('--random', action='store_true',
-                        help='utilize random weights')
-    parser.add_argument('--early_weight', action='store_true',
-                        help='utilize early weights')
-    parser.add_argument('--late_weight', action='store_true',
-                        help='utilize late weights')
     parser.add_argument('--rand_mesh_scale', action='store_true')
-    parser.add_argument('--only_test_ids', action='store_true')
-    parser.add_argument(
-        '--all_cat_model', action='store_true',
-        help='True if we want to use a model that was trained on multipl categories')
+    parser.add_argument('--config', type=str, default='base_cfg')
+    parser.add_argument('--pybullet_viz', action='store_true')
     parser.add_argument(
         '--n_demos', type=int, default=0,
         help='if some integer value greater than 0, we will only use that many demonstrations')
     parser.add_argument('--acts', type=str, default='all')
-    parser.add_argument(
-        '--old_model', action='store_true',
-        help='True if using a model using the old extents centering, else new one uses mean centering + com offset')
-    parser.add_argument(
-        '--save_all_opt_results', action='store_true',
-        help='If True, then we will save point clouds for all optimization runs, otherwise just save the best one (which we execute)')
     parser.add_argument('--grasp_viz', action='store_true')
     parser.add_argument('--single_instance', action='store_true')
     parser.add_argument('--non_thin_feature', action='store_true')
@@ -506,12 +489,10 @@ if __name__ == "__main__":
     parser.add_argument(
         '--gaussian_std', type=float, default=0.02,
         help="ratio of std dev of gaussian noise to mean on depth map)")
+
     parser.add_argument(
-        '--sampled_points_num', type=int, default=0,
-        help="number of sampled object points as input, default 0 for no sampling")
-    parser.add_argument(
-        '--modality', type=str, default="3d", choices=["3d", "2d3d"],
-        help="data modalities used for pose estimation")
+        '--ground_truth_pose', action="store_true",
+        help="if set to true, move the robotic arm to ground truth grasping pose")
 
     args = parser.parse_args()
 
@@ -532,22 +513,12 @@ if __name__ == "__main__":
     if args.depth_noise == "gaussian":
         expstr = expstr + f"_gaussian_noise_{args.gaussian_std}"
 
-    if args.sampled_points_num > 0:
-        expstr = expstr + f"_sample_{args.sampled_points_num}"
-
-    modelstr = 'model--' + str(args.model_path)
-    seedstr = 'seed--' + str(args.seed)
-    full_experiment_name = '_'.join([expstr, modelstr, seedstr])
-
-    vnn_model_path = osp.join(
-        path_util.get_ndf_model_weights(), args.model_path + '.pth')
 
     global_dict = dict(
         shapenet_obj_dir=shapenet_obj_dir,
         demo_load_dir=demo_load_dir,
         demo_imgs_save_dir=demo_imgs_save_dir,
         object_class=obj_class,
-        vnn_checkpoint_path=vnn_model_path
     )
 
     main(args, global_dict)

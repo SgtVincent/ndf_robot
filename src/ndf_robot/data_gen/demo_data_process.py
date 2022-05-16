@@ -516,7 +516,7 @@ def main(args, global_dict):
                 task_data_dict = dict(task_data)
                 task_data_dict.update({
                     "contact_points": gripper_closest_points,
-                    "instrinsic_matrices": int_mats,
+                    "intrinsic_matrices": int_mats,
                     "extrinsic_matrices": ext_mats,
                 })
                 np.savez(task_file_path, **task_data_dict)
