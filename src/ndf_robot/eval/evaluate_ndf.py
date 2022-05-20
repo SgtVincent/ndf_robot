@@ -109,13 +109,13 @@ def main(args, global_dict):
             model_type='dgcnn',
             return_features=True,
             sigmoid=True,
-            acts=args.acts).cuda()
+            acts=args.acts).to(args.device) # .cuda()
     else:
         model = vnn_occupancy_network.VNNOccNet(
             latent_dim=256,
             model_type='pointnet',
             return_features=True,
-            sigmoid=True).cuda()
+            sigmoid=True).to(args.device) # .cuda()
 
     if not args.random:
         checkpoint_path = global_dict['vnn_checkpoint_path']
@@ -236,13 +236,15 @@ def main(args, global_dict):
             model,
             query_pts=place_optimizer_pts,
             query_pts_real_shape=place_optimizer_pts_rs,
-            opt_iterations=args.opt_iterations)
+            opt_iterations=args.opt_iterations,
+            device=args.device)
 
         grasp_optimizer = OccNetOptimizer(
             model,
             query_pts=optimizer_gripper_pts,
             query_pts_real_shape=optimizer_gripper_pts_rs,
-            opt_iterations=args.opt_iterations)
+            opt_iterations=args.opt_iterations,
+            device=args.device)
 
         grasp_optimizer.set_demo_info(demo_target_info_list)
         place_optimizer.set_demo_info(demo_rack_target_info_list)
@@ -253,13 +255,15 @@ def main(args, global_dict):
             model,
             query_pts=place_optimizer_pts,
             query_pts_real_shape=place_optimizer_pts_rs,
-            opt_iterations=args.opt_iterations)
+            opt_iterations=args.opt_iterations,
+            device=args.device)
 
         grasp_optimizer = MultiModalityOptimizer(
             model,
             query_pts=optimizer_gripper_pts,
             query_pts_real_shape=optimizer_gripper_pts_rs,
-            opt_iterations=args.opt_iterations)
+            opt_iterations=args.opt_iterations,
+            device=args.device)
 
         grasp_optimizer.set_demo_info(demo_target_info_list)
         place_optimizer.set_demo_info(demo_rack_target_info_list)
@@ -957,8 +961,12 @@ if __name__ == "__main__":
                         help="number of sampled object points as input, default 0 for no sampling")
     parser.add_argument('--modality', type=str, default="3d", choices=["3d", "2d3d"],
                         help="data modalities used for pose estimation")
+    parser.add_argument('--no_cuda', action="store_true", default=False, 
+                        help="flat to disable using cuda")
 
     args = parser.parse_args()
+
+    args.device = "cuda" if torch.cuda.is_available() and not args.no_cuda else "cpu"
 
     signal.signal(signal.SIGINT, util.signal_handler)
 

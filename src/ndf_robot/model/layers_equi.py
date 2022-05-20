@@ -28,8 +28,8 @@ def get_graph_feature(x, k=20, idx=None, x_coord=None):
             idx = knn(x_coord, k=k)   # (batch_size, num_points, k)
         else:             # fixed knn graph with input point coordinates
             idx = knn(x, k=k)
-    device = torch.device('cuda')
-
+    # device = torch.device('cuda')
+    device = idx.device
     idx_base = torch.arange(0, batch_size, device=device).view(-1, 1, 1)*num_points
 
     idx = idx + idx_base
@@ -55,8 +55,8 @@ def get_graph_feature_cross(x, k=20, idx=None):
     x = x.view(batch_size, -1, num_points)
     if idx is None:
         idx = knn(x, k=k)   # (batch_size, num_points, k)
-    device = torch.device('cuda')
-
+    # device = torch.device('cuda')
+    device = idx.device
     idx_base = torch.arange(0, batch_size, device=device).view(-1, 1, 1)*num_points
 
     idx = idx + idx_base
@@ -83,8 +83,8 @@ def get_graph_mean(x, k=20, idx=None):
     x = x.reshape(batch_size, -1, num_points).contiguous()
     if idx is None:
         idx = knn(x, k=k)   # (batch_size, num_points, k)
-    device = torch.device('cuda')
-
+    # device = torch.device('cuda')
+    device = idx.device
     idx_base = torch.arange(0, batch_size, device=device).view(-1, 1, 1)*num_points
 
     idx = idx + idx_base
@@ -110,8 +110,8 @@ def get_shell_mean_cross(x, k=10, nk=4, idx_all=None):
     x = x.reshape(batch_size, -1, num_points).contiguous()
     if idx_all is None:
         idx_all = knn(x, k=nk*k)   # (batch_size, num_points, k)
-    device = torch.device('cuda')
-    
+    # device = torch.device('cuda')
+    device = idx_all.device
     idx_base = torch.arange(0, batch_size, device=device).view(-1, 1, 1)*num_points
     
     idx = []

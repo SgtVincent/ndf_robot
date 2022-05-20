@@ -14,7 +14,7 @@ from ndf_robot.utils.plotly_save import plot3d
 
 class OccNetOptimizer:
     def __init__(self, model, query_pts, query_pts_real_shape=None, opt_iterations=250, 
-                 noise_scale=0.0, noise_decay=0.5, single_object=False):
+                 noise_scale=0.0, noise_decay=0.5, single_object=False, device="cpu"):
         self.model = model
         self.model_type = self.model.model_type
         self.query_pts_origin = query_pts 
@@ -24,10 +24,12 @@ class OccNetOptimizer:
             self.query_pts_origin_real_shape = query_pts_real_shape
 
         self.loss_fn =  torch.nn.L1Loss()
-        if torch.cuda.is_available():
-            self.dev = torch.device('cuda:0')
-        else:
-            self.dev = torch.device('cpu')
+        self.dev = device
+        # # resolve pytorch device in argument parser 
+        # if torch.cuda.is_available():
+        #     self.dev = torch.device('cuda:0')
+        # else:
+        #     self.dev = torch.device('cpu')
 
         if self.model is not None:
             self.model = self.model.to(self.dev)
