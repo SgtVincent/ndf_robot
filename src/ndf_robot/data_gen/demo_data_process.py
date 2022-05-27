@@ -422,8 +422,10 @@ def main(args, global_dict):
                     if args.save_images:  # save images
                         Image.fromarray(rgb.astype(np.uint8)).save(
                             osp.join(task_imgs_save_dir, f"rgb_cam_{i}.png"))
-                        Image.fromarray(depth.astype(np.uint8)).save(
-                            osp.join(task_imgs_save_dir, f"depth_cam_{i}.png"))
+                        # NOTE: depth info lost after saving to png
+                        # Image.fromarray(depth.astype(np.uint8)).save(
+                        #     osp.join(obj_image_save_dir, f"depth_cam_{i}.png"))
+                        np.save(osp.join(task_imgs_save_dir, f"seg_cam_{i}.npy"), depth)
                         Image.fromarray(seg.astype(np.uint8)).save(
                             osp.join(task_imgs_save_dir, f"seg_cam_{i}.png"))
                     else:  # debug

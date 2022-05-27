@@ -17,11 +17,12 @@ from airobot.utils import common
 from airobot import log_info
 from airobot.utils.common import euler2quat
 
-
 import ndf_robot.model.vnn_occupancy_net_pointnet_dgcnn as vnn_occupancy_network
 from ndf_robot.utils import util, trimesh_util
 from ndf_robot.utils.util import np2img
 
+from ndf_robot.model.dense_corr_pred import DenseCorrPredictor
+from ndf_robot.utils.dense_corr_utils import default_dense_corr_args
 from ndf_robot.opt.optimizer import OccNetOptimizer
 from ndf_robot.opt.optimizer_multimode import MultiModalityOptimizer
 from ndf_robot.robot.multicam import MultiCams
@@ -31,9 +32,10 @@ from ndf_robot.utils import path_util
 from ndf_robot.share.globals import bad_shapenet_mug_ids_list, bad_shapenet_bowls_ids_list, bad_shapenet_bottles_ids_list
 from ndf_robot.utils.franka_ik import FrankaIK
 from ndf_robot.utils.eval_gen_utils import (
-    soft_grasp_close, constraint_grasp_close, constraint_obj_world, constraint_grasp_open,
-    safeCollisionFilterPair, object_is_still_grasped, get_ee_offset, post_process_grasp_point,
-    process_demo_data_rack, process_demo_data_shelf, process_xq_data, process_xq_rs_data,
+    soft_grasp_close, constraint_grasp_close, constraint_obj_world,
+    constraint_grasp_open, safeCollisionFilterPair, object_is_still_grasped,
+    get_ee_offset, post_process_grasp_point, process_demo_data_rack,
+    process_demo_data_shelf, process_xq_data, process_xq_rs_data,
     safeRemoveConstraint,)
 
 
@@ -109,13 +111,13 @@ def main(args, global_dict):
             model_type='dgcnn',
             return_features=True,
             sigmoid=True,
-            acts=args.acts).to(args.device) # .cuda()
+            acts=args.acts).to(args.device)  # .cuda()
     else:
         model = vnn_occupancy_network.VNNOccNet(
             latent_dim=256,
             model_type='pointnet',
             return_features=True,
-            sigmoid=True).to(args.device) # .cuda()
+            sigmoid=True).to(args.device)  # .cuda()
 
     if not args.random:
         checkpoint_path = global_dict['vnn_checkpoint_path']
@@ -149,7 +151,8 @@ def main(args, global_dict):
             place_demo_filenames.append(place_fname)
         else:
             log_warn(
-                'Could not find corresponding placement demo: %s, skipping ' % place_fname)
+                'Could not find corresponding placement demo: %s, skipping ' %
+                place_fname)
 
     success_list = []
     place_success_list = []
@@ -230,43 +233,26 @@ def main(args, global_dict):
         demo_rack_target_info_list.append(rack_target_info)
         demo_shapenet_ids.append(shapenet_id)
 
-    if args.modality == "3d":  # original ndf
+    place_optimizer = OccNetOptimizer(
+        model,
+        query_pts=place_optimizer_pts,
+        query_pts_real_shape=place_optimizer_pts_rs,
+        opt_iterations=args.opt_iterations,
+        device=args.device)
 
-        place_optimizer = OccNetOptimizer(
-            model,
-            query_pts=place_optimizer_pts,
-            query_pts_real_shape=place_optimizer_pts_rs,
-            opt_iterations=args.opt_iterations,
-            device=args.device)
+    grasp_optimizer = OccNetOptimizer(
+        model,
+        query_pts=optimizer_gripper_pts,
+        query_pts_real_shape=optimizer_gripper_pts_rs,
+        opt_iterations=args.opt_iterations,
+        device=args.device)
 
-        grasp_optimizer = OccNetOptimizer(
-            model,
-            query_pts=optimizer_gripper_pts,
-            query_pts_real_shape=optimizer_gripper_pts_rs,
-            opt_iterations=args.opt_iterations,
-            device=args.device)
+    grasp_optimizer.set_demo_info(demo_target_info_list)
+    place_optimizer.set_demo_info(demo_rack_target_info_list)
 
-        grasp_optimizer.set_demo_info(demo_target_info_list)
-        place_optimizer.set_demo_info(demo_rack_target_info_list)
-
-    elif args.modality == "2d3d":  # optimize with 2D and 3D loss
-
-        place_optimizer = MultiModalityOptimizer(
-            model,
-            query_pts=place_optimizer_pts,
-            query_pts_real_shape=place_optimizer_pts_rs,
-            opt_iterations=args.opt_iterations,
-            device=args.device)
-
-        grasp_optimizer = MultiModalityOptimizer(
-            model,
-            query_pts=optimizer_gripper_pts,
-            query_pts_real_shape=optimizer_gripper_pts_rs,
-            opt_iterations=args.opt_iterations,
-            device=args.device)
-
-        grasp_optimizer.set_demo_info(demo_target_info_list)
-        place_optimizer.set_demo_info(demo_rack_target_info_list)
+    if args.modality == "2d3d":  # use dense correspondence
+        dense_corr_args = default_dense_corr_args()
+        dense_corr_pred = DenseCorrPredictor(dense_corr_args)
 
     # get objects that we can use for testing
     test_object_ids = []
@@ -396,10 +382,12 @@ def main(args, global_dict):
         viz_dict['obj_obj_file'] = obj_obj_file
         if 'normalized' not in shapenet_obj_dir:
             viz_dict['obj_obj_norm_file'] = osp.join(
-                shapenet_obj_dir + '_normalized', obj_shapenet_id, 'models/model_normalized.obj')
+                shapenet_obj_dir + '_normalized', obj_shapenet_id,
+                'models/model_normalized.obj')
         else:
             viz_dict['obj_obj_norm_file'] = osp.join(
-                shapenet_obj_dir, obj_shapenet_id, 'models/model_normalized.obj')
+                shapenet_obj_dir, obj_shapenet_id,
+                'models/model_normalized.obj')
         viz_dict['obj_obj_file_dec'] = obj_obj_file_dec
         viz_dict['mesh_scale'] = mesh_scale
 
@@ -445,10 +433,12 @@ def main(args, global_dict):
         p.changeDynamics(obj_id, -1, lateralFriction=0.5)
 
         if obj_class == 'bowl':
-            safeCollisionFilterPair(bodyUniqueIdA=obj_id, bodyUniqueIdB=table_id,
-                                    linkIndexA=-1, linkIndexB=rack_link_id, enableCollision=False)
-            safeCollisionFilterPair(bodyUniqueIdA=obj_id, bodyUniqueIdB=table_id,
-                                    linkIndexA=-1, linkIndexB=shelf_link_id, enableCollision=False)
+            safeCollisionFilterPair(
+                bodyUniqueIdA=obj_id, bodyUniqueIdB=table_id, linkIndexA=-1,
+                linkIndexB=rack_link_id, enableCollision=False)
+            safeCollisionFilterPair(
+                bodyUniqueIdA=obj_id, bodyUniqueIdB=table_id, linkIndexA=-1,
+                linkIndexB=shelf_link_id, enableCollision=False)
             robot.pb_client.set_step_sim(False)
 
         o_cid = None
@@ -482,11 +472,14 @@ def main(args, global_dict):
                 # noise type: random noise of pixel-wise < 2% noise
                 # given Intel Realsense noise is < 2%
                 depth_noise = np.multiply((np.random.rand(
-                    depth.shape[0], depth.shape[1]) - 0.5), depth) * 2 * args.gaussian_std
+                    depth.shape[0],
+                    depth.shape[1]) - 0.5),
+                    depth) * 2 * args.gaussian_std
                 depth += depth_noise
                 depth[depth <= 0.0] = min_depth / 2.0  # min depth clip
             pts_raw, _ = cam.get_pcd(
-                in_world=True, rgb_image=rgb, depth_image=depth, depth_min=0.0, depth_max=np.inf)
+                in_world=True, rgb_image=rgb, depth_image=depth, depth_min=0.0,
+                depth_max=np.inf)
 
             # flatten and find corresponding pixels in segmentation mask
             flat_seg = seg.flatten()
@@ -532,15 +525,19 @@ def main(args, global_dict):
         if obj_class == 'bowl':
             for i in range(p.getNumJoints(robot.arm.robot_id)):
                 safeCollisionFilterPair(
-                    bodyUniqueIdA=robot.arm.robot_id, bodyUniqueIdB=table_id, linkIndexA=i,
-                    linkIndexB=rack_link_id, enableCollision=False)
+                    bodyUniqueIdA=robot.arm.robot_id, bodyUniqueIdB=table_id,
+                    linkIndexA=i, linkIndexB=rack_link_id,
+                    enableCollision=False)
                 safeCollisionFilterPair(
-                    bodyUniqueIdA=robot.arm.robot_id, bodyUniqueIdB=table_id, linkIndexA=i,
-                    linkIndexB=shelf_link_id, enableCollision=False)
-            safeCollisionFilterPair(bodyUniqueIdA=obj_id, bodyUniqueIdB=table_id,
-                                    linkIndexA=-1, linkIndexB=rack_link_id, enableCollision=False)
-            safeCollisionFilterPair(bodyUniqueIdA=obj_id, bodyUniqueIdB=table_id,
-                                    linkIndexA=-1, linkIndexB=shelf_link_id, enableCollision=False)
+                    bodyUniqueIdA=robot.arm.robot_id, bodyUniqueIdB=table_id,
+                    linkIndexA=i, linkIndexB=shelf_link_id,
+                    enableCollision=False)
+            safeCollisionFilterPair(
+                bodyUniqueIdA=obj_id, bodyUniqueIdB=table_id, linkIndexA=-1,
+                linkIndexB=rack_link_id, enableCollision=False)
+            safeCollisionFilterPair(
+                bodyUniqueIdA=obj_id, bodyUniqueIdB=table_id, linkIndexA=-1,
+                linkIndexB=shelf_link_id, enableCollision=False)
 
         # optimize grasp pose
         pre_grasp_ee_pose_mats, best_idx = grasp_optimizer.optimize_transform_implicit(
@@ -551,7 +548,8 @@ def main(args, global_dict):
 
         ########################### grasp post-process #############################
         new_grasp_pt = post_process_grasp_point(
-            pre_grasp_ee_pose, target_obj_pcd_obs, thin_feature=(not args.non_thin_feature),
+            pre_grasp_ee_pose, target_obj_pcd_obs,
+            thin_feature=(not args.non_thin_feature),
             grasp_viz=args.grasp_viz, grasp_dist_thresh=args.grasp_dist_thresh,
             sampled_points_num=args.sampled_points_num)
         pre_grasp_ee_pose[:3] = new_grasp_pt
@@ -567,8 +565,9 @@ def main(args, global_dict):
         rack_relative_pose = util.pose_stamped2list(
             util.pose_from_matrix(rack_pose_mats[best_rack_idx]))
 
-        ee_end_pose = util.transform_pose(pose_source=util.list2pose_stamped(
-            pre_grasp_ee_pose), pose_transform=util.list2pose_stamped(rack_relative_pose))
+        ee_end_pose = util.transform_pose(
+            pose_source=util.list2pose_stamped(pre_grasp_ee_pose),
+            pose_transform=util.list2pose_stamped(rack_relative_pose))
         pre_ee_end_pose2 = util.transform_pose(
             pose_source=ee_end_pose, pose_transform=preplace_offset_tf)
         pre_ee_end_pose1 = util.transform_pose(
@@ -580,7 +579,8 @@ def main(args, global_dict):
 
         obj_start_pose = obj_pose_world
         obj_end_pose = util.transform_pose(
-            pose_source=obj_start_pose, pose_transform=util.list2pose_stamped(rack_relative_pose))
+            pose_source=obj_start_pose, pose_transform=util.list2pose_stamped(
+                rack_relative_pose))
         obj_end_pose_list = util.pose_stamped2list(obj_end_pose)
         viz_dict['final_obj_pose'] = obj_end_pose_list
 
@@ -648,7 +648,7 @@ def main(args, global_dict):
         # attempt grasp and solve for plan to execute placement with arm
         jnt_pos = grasp_jnt_pos = grasp_plan = None
         place_success = grasp_success = False
-        for g_idx in range(2): # one for teleport, the other for planning
+        for g_idx in range(2):  # one for teleport, the other for planning
 
             # reset everything
             robot.pb_client.set_step_sim(False)
@@ -669,12 +669,12 @@ def main(args, global_dict):
             # turn OFF collisions between robot and object / table, and move to pre-grasp pose
             for i in range(p.getNumJoints(robot.arm.robot_id)):
                 safeCollisionFilterPair(
-                    bodyUniqueIdA=robot.arm.robot_id, bodyUniqueIdB=table_id, linkIndexA=i,
-                    linkIndexB=-1, enableCollision=False,
+                    bodyUniqueIdA=robot.arm.robot_id, bodyUniqueIdB=table_id,
+                    linkIndexA=i, linkIndexB=-1, enableCollision=False,
                     physicsClientId=robot.pb_client.get_client_id())
                 safeCollisionFilterPair(
-                    bodyUniqueIdA=robot.arm.robot_id, bodyUniqueIdB=obj_id, linkIndexA=i,
-                    linkIndexB=-1, enableCollision=False,
+                    bodyUniqueIdA=robot.arm.robot_id, bodyUniqueIdB=obj_id,
+                    linkIndexA=i, linkIndexB=-1, enableCollision=False,
                     physicsClientId=robot.pb_client.get_client_id())
             robot.arm.eetool.open()
 
@@ -688,13 +688,14 @@ def main(args, global_dict):
 
                     if jnt_pos is None or grasp_jnt_pos is None:
                         jnt_pos = robot.arm.compute_ik(
-                            pre_pre_grasp_ee_pose[:3], pre_pre_grasp_ee_pose[3:])
+                            pre_pre_grasp_ee_pose[: 3],
+                            pre_pre_grasp_ee_pose[3:])
                         # this is the pose that's at the grasp, where we just need to close the fingers
                         grasp_jnt_pos = robot.arm.compute_ik(
                             pre_grasp_ee_pose[:3], pre_grasp_ee_pose[3:])
 
             if grasp_jnt_pos is not None and jnt_pos is not None:
-                if g_idx == 0: # teleport grasper to target position and grasp
+                if g_idx == 0:  # teleport grasper to target position and grasp
                     robot.pb_client.set_step_sim(True)
                     robot.arm.set_jpos(grasp_jnt_pos, ignore_physics=True)
                     robot.arm.eetool.close(ignore_physics=True)
@@ -737,12 +738,14 @@ def main(args, global_dict):
                         # turn ON collisions between robot and object, and close fingers
                         for i in range(p.getNumJoints(robot.arm.robot_id)):
                             safeCollisionFilterPair(
-                                bodyUniqueIdA=robot.arm.robot_id, bodyUniqueIdB=obj_id,
-                                linkIndexA=i, linkIndexB=-1, enableCollision=True,
+                                bodyUniqueIdA=robot.arm.robot_id,
+                                bodyUniqueIdB=obj_id, linkIndexA=i,
+                                linkIndexB=-1, enableCollision=True,
                                 physicsClientId=robot.pb_client.get_client_id())
                             safeCollisionFilterPair(
-                                bodyUniqueIdA=robot.arm.robot_id, bodyUniqueIdB=table_id,
-                                linkIndexA=i, linkIndexB=rack_link_id, enableCollision=False,
+                                bodyUniqueIdA=robot.arm.robot_id,
+                                bodyUniqueIdB=table_id, linkIndexA=i,
+                                linkIndexB=rack_link_id, enableCollision=False,
                                 physicsClientId=robot.pb_client.get_client_id())
 
                         time.sleep(0.8)
@@ -763,7 +766,8 @@ def main(args, global_dict):
                             if grasp_success:
                                 # turn OFF collisions between object / table and object / rack, and move to pre-place pose
                                 safeCollisionFilterPair(
-                                    obj_id, table_id, -1, -1, enableCollision=True)
+                                    obj_id, table_id, -1, -1,
+                                    enableCollision=True)
                                 robot.arm.eetool.open()
                                 p.resetBasePositionAndOrientation(
                                     obj_id, obj_pos_before_grasp, ori)
@@ -789,7 +793,8 @@ def main(args, global_dict):
                         safeCollisionFilterPair(
                             obj_id, table_id, -1, -1, enableCollision=False)
                         safeCollisionFilterPair(
-                            obj_id, table_id, -1, rack_link_id, enableCollision=False)
+                            obj_id, table_id, -1, rack_link_id,
+                            enableCollision=False)
                         time.sleep(1.0)
 
         if grasp_success:
@@ -823,7 +828,8 @@ def main(args, global_dict):
                     safeCollisionFilterPair(
                         obj_id, table_id, -1, -1, enableCollision=True)
                     safeCollisionFilterPair(
-                        obj_id, table_id, -1, rack_link_id, enableCollision=True)
+                        obj_id, table_id, -1, rack_link_id,
+                        enableCollision=True)
 
                     for jnt in plan3:
                         robot.arm.set_jpos(jnt, wait=False)
@@ -838,8 +844,9 @@ def main(args, global_dict):
                     time.sleep(0.2)
                     for i in range(p.getNumJoints(robot.arm.robot_id)):
                         safeCollisionFilterPair(
-                            bodyUniqueIdA=robot.arm.robot_id, bodyUniqueIdB=obj_id, linkIndexA=i,
-                            linkIndexB=-1, enableCollision=False,
+                            bodyUniqueIdA=robot.arm.robot_id,
+                            bodyUniqueIdB=obj_id, linkIndexA=i, linkIndexB=-1,
+                            enableCollision=False,
                             physicsClientId=robot.pb_client.get_client_id())
                     robot.arm.move_ee_xyz([0, 0.075, 0.075])
                     safeCollisionFilterPair(
@@ -955,13 +962,16 @@ if __name__ == "__main__":
     # custom arguments
     parser.add_argument('--depth_noise', type=str,
                         default="none", choices=["none", "gaussian"])
-    parser.add_argument('--gaussian_std', type=float, default=0.02,
-                        help="ratio of std dev of gaussian noise to mean on depth map)")
-    parser.add_argument('--sampled_points_num', type=int, default=0,
-                        help="number of sampled object points as input, default 0 for no sampling")
-    parser.add_argument('--modality', type=str, default="3d", choices=["3d", "2d3d"],
-                        help="data modalities used for pose estimation")
-    parser.add_argument('--no_cuda', action="store_true", default=False, 
+    parser.add_argument(
+        '--gaussian_std', type=float, default=0.02,
+        help="ratio of std dev of gaussian noise to mean on depth map)")
+    parser.add_argument(
+        '--sampled_points_num', type=int, default=0,
+        help="number of sampled object points as input, default 0 for no sampling")
+    parser.add_argument(
+        '--modality', type=str, default="3d", choices=["3d", "2d3d"],
+        help="data modalities used for pose estimation")
+    parser.add_argument('--no_cuda', action="store_true", default=False,
                         help="flat to disable using cuda")
 
     args = parser.parse_args()
@@ -972,7 +982,8 @@ if __name__ == "__main__":
 
     obj_class = args.object_class
     shapenet_obj_dir = osp.join(
-        path_util.get_ndf_obj_descriptions(), obj_class + '_centered_obj_normalized')
+        path_util.get_ndf_obj_descriptions(),
+        obj_class + '_centered_obj_normalized')
 
     demo_load_dir = osp.join(path_util.get_ndf_data(),
                              'demos', obj_class, args.demo_exp)
