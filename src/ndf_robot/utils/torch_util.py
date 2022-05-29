@@ -1,4 +1,5 @@
 import torch
+import numpy as np
 
 
 def transform_pcd(pcd, transform):
@@ -6,6 +7,7 @@ def transform_pcd(pcd, transform):
         pcd = np.concatenate((pcd, np.ones((pcd.shape[0], 1))), axis=1)
     pcd_new = np.matmul(transform, pcd.T)[:-1, :].T
     return pcd_new
+
 
 def transform_pcd_torch(pcd, transform):
     if pcd.dim() < 3:
@@ -15,7 +17,8 @@ def transform_pcd_torch(pcd, transform):
         pcd_new = torch.matmul(transform, pcd.T)[:-1, :].T
     else:
         if pcd.shape[2] != 4:
-            ones = torch.ones((pcd.shape[0], pcd.shape[1]))[:, :, None].float().to(pcd.device)
+            ones = torch.ones((pcd.shape[0], pcd.shape[1]))[
+                :, :, None].float().to(pcd.device)
             pcd = torch.cat((pcd, ones), dim=2)
         pcd = pcd.transpose(1, 2)
         pcd_new = torch.matmul(transform, pcd)
@@ -42,8 +45,15 @@ def expmap2rotmat(r):
     r_1 = torch.unsqueeze(norm_r, 2)  # N, 3, 1
     r_2 = torch.unsqueeze(norm_r, 1)  # N, 1, 3
     zero_col = torch.zeros(bs, 1).to(dev)
-    skew_sym = torch.cat([zero_col, -norm_r[:, 2:3], norm_r[:, 1:2], norm_r[:, 2:3], zero_col,
-                          -norm_r[:, 0:1], -norm_r[:, 1:2], norm_r[:, 0:1], zero_col], 1)
+    skew_sym = torch.cat(
+        [zero_col, -norm_r[:, 2: 3],
+         norm_r[:, 1: 2],
+         norm_r[:, 2: 3],
+         zero_col, -norm_r[:, 0: 1],
+         -norm_r[:, 1: 2],
+         norm_r[:, 0: 1],
+         zero_col],
+        1)
     skew_sym = skew_sym.contiguous().view(bs, 3, 3)
     R = cos_theta*eye + (1-cos_theta)*torch.bmm(r_1, r_2) + sin_theta*skew_sym
     return R
@@ -55,8 +65,13 @@ def rotmat2expmap(R):
     :return: r: Rotation vector, Nx3
     """
     assert R.shape[1] == R.shape[2] == 3
-    theta = torch.acos(torch.clamp((R[:, 0, 0] + R[:, 1, 1] + R[:, 2, 2] - 1) / 2, min=-1., max=1.)).view(-1, 1)
-    r = torch.stack((R[:, 2, 1]-R[:, 1, 2], R[:, 0, 2]-R[:, 2, 0], R[:, 1, 0]-R[:, 0, 1]), 1) / (2*torch.sin(theta))
+    theta = torch.acos(torch.clamp(
+        (R[:, 0, 0] + R[:, 1, 1] + R[:, 2, 2] - 1) / 2, min=-1.,
+        max=1.)).view(-1, 1)
+    r = torch.stack((R[:, 2, 1] - R[:, 1, 2],
+                     R[:, 0, 2] - R[:, 2, 0],
+                     R[:, 1, 0] - R[:, 0, 1]),
+                    1) / (2 * torch.sin(theta))
     r_norm = r / torch.sqrt(torch.sum(torch.pow(r, 2), 1, keepdim=True))
     return theta * r_norm
 
@@ -138,6 +153,7 @@ def quaternion_to_angle_axis(quaternion: torch.Tensor) -> torch.Tensor:
     angle_axis[..., 2] += q3 * k
     return angle_axis
 
+
 def angle_axis_to_rotation_matrix(angle_axis):
     """Convert 3d vector of axis-angle rotation to 4x4 rotation matrix
 
@@ -209,7 +225,7 @@ def angle_axis_to_rotation_matrix(angle_axis):
     # fill output matrix with masked values
     rotation_matrix[..., :3, :3] = \
         mask_pos * rotation_matrix_normal + mask_neg * rotation_matrix_taylor
-    return rotation_matrix  # Nx4x4        
+    return rotation_matrix  # Nx4x4
 
 
 def rotation_matrix_to_angle_axis(rotation_matrix):
@@ -312,5 +328,3 @@ def rotation_matrix_to_quaternion(rotation_matrix, eps=1e-6):
                     t2_rep * mask_c2 + t3_rep * mask_c3)  # noqa
     q *= 0.5
     return q
-
-

@@ -168,6 +168,8 @@ class OccNetOptimizer:
         tf_list = []
         M = full_opt
 
+        # if 'grasp_prior' in kwargs:
+        #     trans = (torch.from_numpy(kwargs))
         trans = (torch.rand((M, 3)) * 0.1).float().to(dev)
         rot = torch.rand(M, 3).float().to(dev)
         # rot_idx = np.random.randint(self.rot_grid.shape[0], size=M)

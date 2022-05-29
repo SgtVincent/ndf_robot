@@ -110,6 +110,9 @@ src/ndf_robot/assets
 src/ndf_robot/data
 src/ndf_robot/descriptions/demo_objects/mug_centered_obj_normalized
 src/ndf_robot/descriptions/objects
-src/ndf_robot/eval
 src/ndf_robot/eval_data
+src/ndf_robot/eval/visualization
+src/ndf_robot/eval/vid_visualization
 src/ndf_robot/model_weights
+
+*.html
