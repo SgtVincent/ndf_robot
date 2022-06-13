@@ -141,9 +141,6 @@ def main(args, global_dict):
     else:
         log_warn('USING ALL %d DEMONSTRATIONS' % len(grasp_demo_filenames))
 
-    grasp_demo_filenames = grasp_demo_filenames[:args.num_demo]
-    place_demo_filenames = place_demo_filenames[:args.num_demo]
-
     # reset
     robot.arm.reset(force_reset=True)
     robot.cam.setup_camera(
@@ -313,7 +310,7 @@ def main(args, global_dict):
             robot.arm.go_home(ignore_physics=True)
             # change to realtime mode to move arm
             robot.pb_client.set_step_sim(False)
-            robot.arm.move_ee_xyz([0, 0, 0.5]) # avoid occlusion
+            robot.arm.move_ee_xyz([0, 0, 0.5])  # avoid occlusion
 
             # if args.any_pose:
             #     robot.pb_client.set_step_sim(True)
@@ -374,7 +371,6 @@ def main(args, global_dict):
                 robot.arm.eetool.close(ignore_physics=True)
                 time.sleep(0.2)
 
-
             # get object point cloud
             depth_imgs = []
             seg_idxs = []
@@ -416,7 +412,8 @@ def main(args, global_dict):
                 # NOTE: depth info lost after saving to png
                 # Image.fromarray(depth.astype(np.uint8)).save(
                 #     osp.join(obj_image_save_dir, f"depth_cam_{i}.png"))
-                np.save(osp.join(task_imgs_save_dir, f"depth_cam_{i}.npy"), depth)
+                np.save(osp.join(task_imgs_save_dir,
+                        f"depth_cam_{i}.npy"), depth)
                 Image.fromarray(seg.astype(np.uint8)).save(
                     osp.join(task_imgs_save_dir, f"seg_cam_{i}.png"))
 
@@ -468,9 +465,6 @@ if __name__ == "__main__":
     parser.add_argument('--demo_exp', type=str, default='test_bottle')
     parser.add_argument('--exp', type=str, default='debug_eval')
     parser.add_argument('--object_class', type=str, default='bottle')
-    parser.add_argument('--opt_iterations', type=int, default=250)
-    parser.add_argument('--num_demo', type=int, default=12,
-                        help='number of demos use')
     parser.add_argument('--any_pose', action='store_true')
     parser.add_argument('--rand_mesh_scale', action='store_true')
     parser.add_argument('--config', type=str, default='base_cfg')
@@ -514,7 +508,6 @@ if __name__ == "__main__":
     expstr = 'exp--' + str(args.exp)
     if args.depth_noise == "gaussian":
         expstr = expstr + f"_gaussian_noise_{args.gaussian_std}"
-
 
     global_dict = dict(
         shapenet_obj_dir=shapenet_obj_dir,

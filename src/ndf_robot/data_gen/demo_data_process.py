@@ -393,8 +393,8 @@ def main(args, global_dict):
                 task_imgs_save_dir = osp.join(
                     demo_imgs_save_dir, task_fn.split('.')[0])
                 util.safe_makedirs(task_imgs_save_dir)
-                
-                # saved to demo files 
+
+                # saved to demo files
                 int_mats = []
                 ext_mats = []
                 # rgb_images = []
@@ -405,7 +405,6 @@ def main(args, global_dict):
                     int_mats.append(cam.cam_int_mat)
                     ext_mats.append(np.linalg.inv(cam.cam_ext_mat))
                     # rgb_images.append(rgb)
-                    
 
                     # Add noise
                     if args.depth_noise == "gaussian":
@@ -425,7 +424,8 @@ def main(args, global_dict):
                         # NOTE: depth info lost after saving to png
                         # Image.fromarray(depth.astype(np.uint8)).save(
                         #     osp.join(obj_image_save_dir, f"depth_cam_{i}.png"))
-                        np.save(osp.join(task_imgs_save_dir, f"seg_cam_{i}.npy"), depth)
+                        np.save(osp.join(task_imgs_save_dir,
+                                f"seg_cam_{i}.npy"), depth)
                         Image.fromarray(seg.astype(np.uint8)).save(
                             osp.join(task_imgs_save_dir, f"seg_cam_{i}.png"))
                     else:  # debug
@@ -493,7 +493,7 @@ def main(args, global_dict):
                 #     obj_pcd_pts, axis=0)  # object shape point cloud
 
             ###### get closest points on object as contact query points #######
-            
+
             if args.save_contact_pts:
                 demo_update_dict = {}  # extra information to write back to demo files
                 ee_pose_world = task_data['ee_pose_world'].tolist()
@@ -513,8 +513,8 @@ def main(args, global_dict):
                 #         print(pt[8])
                 #     gripper_contact_pose[: 3] = np.asarray(
                 #         gripper_closest_points[0][5])
-                
-                # write back updated to demo files 
+
+                # write back updated to demo files
                 task_data_dict = dict(task_data)
                 task_data_dict.update({
                     "contact_points": gripper_closest_points,
@@ -522,7 +522,7 @@ def main(args, global_dict):
                     "extrinsic_matrices": ext_mats,
                 })
                 np.savez(task_file_path, **task_data_dict)
-            
+
             robot.arm.go_home(ignore_physics=True)
             # deleted unused code here
             robot.pb_client.remove_body(obj_id)
@@ -534,7 +534,8 @@ if __name__ == "__main__":
     parser.add_argument('--seed', type=int, default=0)
     parser.add_argument('--num_samples', type=int, default=100)
     parser.add_argument('--data_dir', type=str, default='data')
-    parser.add_argument('--demo_imgs_save_dir', type=str, default='demo_images')
+    parser.add_argument('--demo_imgs_save_dir',
+                        type=str, default='demo_images')
     parser.add_argument('--demo_exp', type=str, default='test_bottle')
     parser.add_argument('--exp', type=str, default='debug_eval')
     parser.add_argument('--object_class', type=str, default='bottle')
@@ -605,6 +606,7 @@ if __name__ == "__main__":
     if not args.save_images:
         print("[Warning]: --save_images flag is False, no images will be saved")
     if not args.save_contact_pts:
-        print("[Warning]: --save_contact_pts flag is False, no images will be saved")
+        print(
+            "[Warning]: --save_contact_pts flag is False, no contact points will be saved")
 
     main(args, global_dict)

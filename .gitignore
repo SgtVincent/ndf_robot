@@ -107,7 +107,9 @@ ENV/
 # dataset and output
 visualization
 src/ndf_robot/assets
-src/ndf_robot/data
+src/ndf_robot/data/*
+# include kinect noise pattern image
+!src/ndf_robot/data/noise_model 
 src/ndf_robot/descriptions/demo_objects/mug_centered_obj_normalized
 src/ndf_robot/descriptions/objects
 src/ndf_robot/eval_data

@@ -72,12 +72,6 @@ def main(args, global_dict):
 
     shapenet_obj_dir = global_dict['shapenet_obj_dir']
     obj_class = global_dict['object_class']
-    eval_save_dir = global_dict['eval_save_dir']
-
-    eval_grasp_imgs_dir = osp.join(eval_save_dir, 'grasp_imgs')
-    eval_teleport_imgs_dir = osp.join(eval_save_dir, 'teleport_imgs')
-    util.safe_makedirs(eval_grasp_imgs_dir)
-    util.safe_makedirs(eval_teleport_imgs_dir)
 
     test_shapenet_ids = np.loadtxt(osp.join(path_util.get_ndf_share(
     ), '%s_test_object_split.txt' % obj_class), dtype=str).tolist()
@@ -286,11 +280,11 @@ def main(args, global_dict):
         log_info(id_str)
 
         viz_dict = {}  # will hold information that's useful for post-run visualizations
-        eval_iter_dir = osp.join(eval_save_dir, 'trial_%d' % iteration)
-        util.safe_makedirs(eval_iter_dir)
+        # eval_iter_dir = osp.join(eval_save_dir, 'trial_%d' % iteration)
+        # util.safe_makedirs(eval_iter_dir)
 
         if obj_class in ['bottle', 'jar', 'bowl', 'mug']:
-            upright_orientation = common.euler2quat([np.pi/2, 0, 0]).tolist()
+            upright_orientation = common.euler2quat([np.pi / 2, 0, 0]).tolist()
         else:
             upright_orientation = common.euler2quat([0, 0, 0]).tolist()
 
@@ -425,7 +419,8 @@ def main(args, global_dict):
                 get_rgb=True, get_depth=True, get_seg=True)
 
             # save images
-            obj_image_save_dir = osp.join(image_save_dir, obj_class, obj_shapenet_id)
+            obj_image_save_dir = osp.join(
+                image_save_dir, obj_class, obj_shapenet_id)
             if not osp.exists(obj_image_save_dir):
                 os.makedirs(obj_image_save_dir)
                 # save images
@@ -437,7 +432,6 @@ def main(args, global_dict):
             np.save(osp.join(obj_image_save_dir, f"seg_cam_{i}.npy"), depth)
             Image.fromarray(seg.astype(np.uint8)).save(
                 osp.join(obj_image_save_dir, f"seg_cam_{i}.png"))
-
 
             # # Add noise
             if args.depth_noise == "gaussian":
@@ -461,11 +455,11 @@ def main(args, global_dict):
             obj_pts = pts_raw[obj_inds[0], :]
             obj_pcd_pts.append(util.crop_pcd(obj_pts))
             table_pts = pts_raw[table_inds[0],
-                                :][::int(table_inds[0].shape[0]/500)]
+                                :][::int(table_inds[0].shape[0] / 500)]
             table_pcd_pts.append(table_pts)
 
             if rack_link_id is not None:
-                rack_val = table_id + ((rack_link_id+1) << 24)
+                rack_val = table_id + ((rack_link_id + 1) << 24)
                 rack_inds = np.where(flat_seg == rack_val)
                 if rack_inds[0].shape[0] > 0:
                     rack_pts = pts_raw[rack_inds[0], :]
@@ -499,7 +493,7 @@ if __name__ == "__main__":
     parser.add_argument('--num_iterations', type=int, default=100)
     parser.add_argument('--resume_iter', type=int, default=0)
     parser.add_argument('--config', type=str, default='base_cfg')
-    parser.add_argument('--model_path', type=str, required=True)
+    # parser.add_argument('--model_path', type=str, required=True)
     parser.add_argument('--save_vis_per_model', action='store_true')
     parser.add_argument('--noise_scale', type=float, default=0.05)
     parser.add_argument('--noise_decay', type=float, default=0.75)
@@ -560,22 +554,22 @@ if __name__ == "__main__":
     if args.sampled_points_num > 0:
         expstr = expstr + f"_sample_{args.sampled_points_num}"
 
-    modelstr = 'model--' + str(args.model_path)
-    seedstr = 'seed--' + str(args.seed)
-    full_experiment_name = '_'.join([expstr, modelstr, seedstr])
-    eval_save_dir = osp.join(path_util.get_ndf_eval_data(
-    ), args.eval_data_dir, full_experiment_name)
-    util.safe_makedirs(eval_save_dir)
+    # modelstr = 'model--' + str(args.model_path)
+    # seedstr = 'seed--' + str(args.seed)
+    # full_experiment_name = '_'.join([expstr, modelstr, seedstr])
+    # eval_save_dir = osp.join(path_util.get_ndf_eval_data(
+    # ), args.eval_data_dir, full_experiment_name)
+    # util.safe_makedirs(eval_save_dir)
 
-    vnn_model_path = osp.join(
-        path_util.get_ndf_model_weights(), args.model_path + '.pth')
+    # vnn_model_path = osp.join(
+    #     path_util.get_ndf_model_weights(), args.model_path + '.pth')
 
     global_dict = dict(
         shapenet_obj_dir=shapenet_obj_dir,
         demo_load_dir=demo_load_dir,
-        eval_save_dir=eval_save_dir,
+        # eval_save_dir=eval_save_dir,
         object_class=obj_class,
-        vnn_checkpoint_path=vnn_model_path
+        # vnn_checkpoint_path=vnn_model_path
     )
 
     main(args, global_dict)

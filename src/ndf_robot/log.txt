@@ -29,7 +29,7 @@ Examples:
 
 + OpenCL (OFF)
 + Parameters
-	 input                                       /home/junting/repo/ndf_robot/src/ndf_robot/descriptions/objects/bottle_centered_obj_normalized/a1275bd03ab15100f6dbe3dc17d6cdf7/models/model_normalized.obj
+	 input                                       /home/junting/sslgrasp/ndf_robot/src/ndf_robot/descriptions/objects/bottle_centered_obj_normalized/48202d357e79315e45891653421dc140/models/model_normalized.obj
 	 resolution                                  1000000
 	 max. depth                                  20
 	 max. concavity                              0.0025
@@ -46,43 +46,54 @@ Examples:
 	 OpenCL acceleration                         1
 	 OpenCL platform ID                          0
 	 OpenCL device ID                            0
-	 output                                      /home/junting/repo/ndf_robot/src/ndf_robot/descriptions/objects/bottle_centered_obj_normalized/a1275bd03ab15100f6dbe3dc17d6cdf7/models/model_normalized_dec.obj
+	 output                                      /home/junting/sslgrasp/ndf_robot/src/ndf_robot/descriptions/objects/bottle_centered_obj_normalized/48202d357e79315e45891653421dc140/models/model_normalized_dec.obj
 	 log                                         log.txt
 + Load mesh
 + Voxelization
-	 dim = 64	-> 16004 voxels
-	 dim = 250	-> 918564 voxels
-	 dim = 257	-> 984797 voxels
-	 dim = 258	-> 989580 voxels
-	 dim = 259	-> 1019316 voxels
-	 time 0.0869158s
+	 dim = 64	-> 11757 voxels
+	 dim = 277	-> 855478 voxels
+	 dim = 292	-> 1000176 voxels
+	 time 0.122052s
 + Compute primitive set
-	 # primitives               1019316
-	 # inside surface           944405
-	 # on surface               74911
-	 time 0.00427284s
+	 # primitives               1000176
+	 # inside surface           913125
+	 # on surface               87051
+	 time 0.00587891s
 + Approximate Convex Decomposition
 	 Subdivision level 1
-	 -> Part[0] C  = 0.110273, E  = 0.0660412, VS = 74911, VI = 944405
-		 [Regular sampling] Number of clipping planes 102
+	 -> Part[0] C  = 0.126152, E  = 0.0768165, VS = 87051, VI = 913125
+		 [Regular sampling] Number of clipping planes 113
 
-			 Best  0071 T=0.015035 C=0.007153 B=0.003669 S=0.004212 (0.0, 1.0, 0.0, -0.322)
+			 Best  0067 T=0.044692 C=0.035011 B=0.003374 S=0.006308 (0.0, 1.0, 0.0, -0.257)
 
 		 [Refining] Number of clipping planes 9
 
-			 Best  0003 T=0.015849 C=0.007972 B=0.003665 S=0.004212 (0.0, 1.0, 0.0, -0.318)
+			 Best  0005 T=0.046615 C=0.036917 B=0.003390 S=0.006308 (0.0, 1.0, 0.0, -0.260)
 
 	 Subdivision level 2
-	 -> Part[0] C  = 0.00762071, E  = 0.0604977, VS = 68623, VI = 916970
-	 -> Part[1] C  = 0.00178117, E  = 0.00632633, VS = 7176, VI = 26547
-+ Generate 2 convex-hulls 
-	 time 0.955794s
+	 -> Part[0] C  = 0.0204266, E  = 0.0628582, VS = 71233, VI = 813279
+	 -> Part[1] C  = 0.0193992, E  = 0.0167732, VS = 19008, VI = 96656
+		 [Regular sampling] Number of clipping planes 50
+
+			 Best  0031 T=0.006938 C=0.005917 B=0.000051 S=0.000970 (0.0, 1.0, 0.0, -0.507)
+
+		 [Refining] Number of clipping planes 9
+
+			 Best  0007 T=0.007160 C=0.006136 B=0.000054 S=0.000970 (0.0, 1.0, 0.0, -0.517)
+
+	 Subdivision level 3
+	 -> Part[0] C  = 0.00561721, E  = 0.0135541, VS = 15360, VI = 82416
+	 -> Part[1] C  = 0.00176052, E  = 0.00428332, VS = 4854, VI = 13034
++ Generate 3 convex-hulls 
+	 time 1.40698s
 + Merge Convex Hulls
-	 time 0.000135976s
-+ Simplify 2 convex-hulls 
-		 Simplify CH[00000] 79 V, 154 T
-		 Simplify CH[00001] 87 V, 170 T
-	 time 0.000987672s
-+ Generate output: 2 convex-hulls 
-	 CH[00000] 49 V, 94 T
-	 CH[00001] 40 V, 76 T
+	 time 0.00218576s
++ Simplify 3 convex-hulls 
+		 Simplify CH[00000] 716 V, 1428 T
+		 Simplify CH[00001] 321 V, 638 T
+		 Simplify CH[00002] 211 V, 418 T
+	 time 0.0160653s
++ Generate output: 3 convex-hulls 
+	 CH[00000] 64 V, 124 T
+	 CH[00001] 64 V, 124 T
+	 CH[00002] 54 V, 104 T
