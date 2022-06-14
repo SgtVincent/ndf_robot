@@ -93,4 +93,9 @@ def filter_outliers(pts, mask, th=5):
         if dist <= th:
             new_pts.append(idx[::-1])  # (r, c) to (x, y)
 
-    return np.stack(new_pts)
+    if len(new_pts) > 0:
+        return np.stack(new_pts)
+    else: 
+        print("All warped grasping points away from target object")
+        return None
+

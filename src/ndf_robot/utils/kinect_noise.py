@@ -127,8 +127,13 @@ def add_noise(depth):
     (h, w) = np.shape(depth)
     # The depth here needs to converted to cms so scale factor is introduced
     # though often this can be tuned from [100, 200] to get the desired banding / quantisation effects
-    noisy_depth = (35130 / np.round(
-        (35130 / np.round(depth * scale_factor)) + np.random.normal(size=(h, w)) * (1.0 / 6.0) + 0.5)) / scale_factor
+    def safe_round(x):
+        x_r = np.round(x)
+        x_r[x_r == 0] = 1
+        return x_r
+    
+    noisy_depth = (35130 / safe_round(
+        (35130 / safe_round(depth * scale_factor)) + np.random.normal(size=(h, w)) * (1.0 / 6.0) + 0.5)) / scale_factor
 
     # Displaying side by side the orignal depth map and the noisy depth map with barron noise cvpr 2013 model
     return noisy_depth

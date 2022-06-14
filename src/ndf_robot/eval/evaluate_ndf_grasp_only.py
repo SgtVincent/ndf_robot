@@ -46,7 +46,7 @@ def main(args, global_dict):
     else:
         set_log_level('info')
 
-    robot = Robot('franka', pb_cfg={'gui': args.pybullet_viz}, arm_cfg={
+    robot = Robot('franka', pb_cfg={'gui': args.pybullet_viz, 'opengl_render': args.opengl}, arm_cfg={
                   'self_collision': False, 'seed': args.seed})
     ik_helper = FrankaIK(gui=False)
     torch.manual_seed(args.seed)
@@ -194,7 +194,8 @@ def main(args, global_dict):
     grasp_demo_filenames = grasp_demo_filenames[:max_demo]
     place_demo_filenames = place_demo_filenames[:max_demo]
 
-    log_warn('USING ONLY %d DEMONSTRATIONS' % len(grasp_demo_filenames))
+    log_warn(
+        f'USING ONLY {len(grasp_demo_filenames)} DEMONSTRATIONS: {grasp_demo_filenames}')
 
     max_bb_volume = 0
     place_xq_demo_idx = 0
@@ -557,12 +558,12 @@ def main(args, global_dict):
                 filtered_query_pixels = filter_outliers(
                     query_pixels, seg == obj_id)
 
-                p3dP = cam.get_pix_3dpt(
-                    rs=filtered_query_pixels[:, 1],
-                    cs=filtered_query_pixels[:, 0]
-                )
-
-                grasp_priors.append(np.mean(p3dP.reshape(-1, 3), axis=0))
+                if filtered_query_pixels is not None:
+                    p3dP = cam.get_pix_3dpt(
+                        rs=filtered_query_pixels[:, 1],
+                        cs=filtered_query_pixels[:, 0]
+                    )
+                    grasp_priors.append(np.mean(p3dP.reshape(-1, 3), axis=0))
 
             ########## process depth image #######################
             # Add noise
@@ -578,15 +579,18 @@ def main(args, global_dict):
                 depth[depth <= 0.0] = min_depth / 2.0  # min depth clip
             elif args.depth_noise == "kinect":
                 depth = add_noise(depth)
+            # NOTE: depth_min = 0 will be overwritten by 0.01(default)
+            depth_min = 0.01
+            depth_max = 5.0
+            valid = np.logical_and(depth > depth_min, depth < depth_max)
             pts_raw, _ = cam.get_pcd(
-                in_world=True, rgb_image=rgb, depth_image=depth, depth_min=0.0,
-                depth_max=np.inf)
+                in_world=True, rgb_image=rgb, depth_image=depth, depth_min=depth_min,
+                depth_max=depth_max)
 
             # flatten and find corresponding pixels in segmentation mask
-            fl_d = depth.flatten()
-            notdeleted_ind = fl_d != 0
+            valid_inds = valid.flatten()
             flat_seg = seg.flatten()
-            flat_seg = flat_seg[notdeleted_ind]
+            flat_seg = flat_seg[valid_inds]
             flat_depth = depth.flatten()
             obj_inds = np.where(flat_seg == obj_id)
             table_inds = np.where(flat_seg == table_id)
@@ -651,7 +655,7 @@ def main(args, global_dict):
         viz_dict['start_ee_pose'] = pre_grasp_ee_pose
 
         ########################### grasp post-process #############################
-        if args.modality == "2d3d":
+        if args.modality == "2d3d" and len(grasp_priors) > 0:
             grasp_prior = grasp_priors[0]
         else:
             grasp_prior = None
@@ -1096,6 +1100,7 @@ if __name__ == "__main__":
     parser.add_argument('--vis_2d', action="store_true", default=False)
     parser.add_argument('--no_cuda', action="store_true", default=False,
                         help="flat to disable using cuda")
+    parser.add_argument('--disable_opengl', action="store_true", default=False)
 
     # TODO: implement the 2d dense correspondence computation with filtered demos
     parser.add_argument('--num_cams', type=int, default=1)
@@ -1103,6 +1108,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     args.device = "cuda" if torch.cuda.is_available() and not args.no_cuda else "cpu"
+    args.opengl = not args.disable_opengl
 
     signal.signal(signal.SIGINT, util.signal_handler)
 
